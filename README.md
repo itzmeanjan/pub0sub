@@ -12,7 +12,7 @@ Few days back I worked on an _Embeddable, Fast, Light-weight Pub/Sub System for 
 
 That enables making multiple go routines talk to each other over **topics**. Also there's no involvement of network I/O, so all operations are quite low-latency.
 
-> If you're interested in taking a look at [`pubsub`](github.com/itzmeanjan/pubsub)
+> If you're interested in taking a look at [`pubsub`](https://github.com/itzmeanjan/pubsub)
 
 Now I'm interested in extending aforementioned `pubsub` architecture to a more generic form so that clients i.e. _{publishers, subscribers}_ can talk to **Pub/Sub Hub** over network i.e. TCP, QUIC.
 
