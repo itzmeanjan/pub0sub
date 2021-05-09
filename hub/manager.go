@@ -52,8 +52,6 @@ func handleTCPConnection(ctx context.Context, conn net.Conn, hub *pubsub.PubSub)
 
 STOP:
 	for {
-
-	CONTINUE:
 		select {
 		case <-ctx.Done():
 			return
@@ -67,13 +65,23 @@ STOP:
 
 			switch op {
 			case PUB_REQ:
+				err := handlePubReq(conn, hub)
+				if err != nil {
+					log.Printf("[pub0sub] Error : %s\n", err.Error())
+
+					if nErr, ok := err.(net.Error); ok && !nErr.Temporary() {
+						break STOP
+					}
+				}
+
 			case NEW_SUB_REQ:
 			case MSG_REQ:
 			case ADD_SUB_REQ:
 			case UNSUB_REQ:
 			default:
-				break CONTINUE
+				break STOP
 			}
+
 		}
 	}
 
