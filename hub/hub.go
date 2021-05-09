@@ -1,4 +1,4 @@
-package pub0sub
+package hub
 
 import (
 	"context"
@@ -10,5 +10,8 @@ import (
 // to be used for communication from connection managers
 func StartHub(ctx context.Context) *pubsub.PubSub {
 	hub := pubsub.New(ctx)
+	if !hub.IsAlive() {
+		return nil
+	}
 	return hub
 }

@@ -1,4 +1,4 @@
-package pub0sub
+package hub
 
 import (
 	"encoding/binary"
