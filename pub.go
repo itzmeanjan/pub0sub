@@ -67,7 +67,18 @@ STOP:
 				break STOP
 			}
 
-			hub.Publish(msg)
+			ok, n := hub.Publish(msg)
+			resp := PubResponse{Status: ok, ReceiverC: n}
+			if _, err := resp.WriteTo(conn); err != nil {
+
+				if nErr, ok := err.(net.Error); ok && nErr.Temporary() {
+					log.Printf("[pub0sub] Error : %s\n", nErr.Error())
+					break
+				}
+
+				log.Printf("[pub0sub] Error : %s\n", err.Error())
+				break STOP
+			}
 
 		}
 	}
