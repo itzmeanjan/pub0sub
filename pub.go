@@ -19,17 +19,55 @@ func StartPubManager(ctx context.Context, on string, hub *pubsub.PubSub, done ch
 		return
 	}
 
+	defer func() {
+		if err := lis.Close(); err != nil {
+			log.Printf("[pub0sub] Error : %s\n", err.Error())
+		}
+	}()
+
+	done <- true
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
 
 		default:
-			_, err := lis.Accept()
+			conn, err := lis.Accept()
 			if err != nil {
 				log.Printf("[pub0sub] Error : %s\n", err.Error())
-				continue
+				break
 			}
+
+			go handlePublisher(ctx, conn, hub)
+
+		}
+	}
+}
+
+// handlePublisher - Each publisher connection is handled in its own go routine
+func handlePublisher(ctx context.Context, conn net.Conn, hub *pubsub.PubSub) {
+
+STOP:
+	for {
+		select {
+		case <-ctx.Done():
+			return
+
+		default:
+			msg := new(pubsub.Message)
+			_, err := msg.ReadFrom(conn)
+			if err != nil {
+				if nErr, ok := err.(net.Error); ok && nErr.Temporary() {
+					log.Printf("[pub0sub] Error : %s\n", nErr.Error())
+					break
+				}
+
+				log.Printf("[pub0sub] Error : %s\n", err.Error())
+				break STOP
+			}
+
+			hub.Publish(msg)
 
 		}
 	}
