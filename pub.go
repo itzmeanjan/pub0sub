@@ -48,6 +48,12 @@ func StartPubManager(ctx context.Context, on string, hub *pubsub.PubSub, done ch
 // handlePublisher - Each publisher connection is handled in its own go routine
 func handlePublisher(ctx context.Context, conn net.Conn, hub *pubsub.PubSub) {
 
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("[pub0sub] Error : %s\n", err.Error())
+		}
+	}()
+
 STOP:
 	for {
 		select {
