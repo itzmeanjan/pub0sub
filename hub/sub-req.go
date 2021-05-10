@@ -7,27 +7,59 @@ import (
 	"github.com/itzmeanjan/pubsub"
 )
 
+// NewSubRequest - Client to send new subscription request
+// in this form
 type NewSubRequest struct {
 	Topics []pubsub.String
 }
 
-func (r *NewSubRequest) WriteTo(w io.Writer) (int64, error) {
+// WriteTo - Writes subscription request i.e. list of topics
+// to stream
+func (s *NewSubRequest) WriteTo(w io.Writer) (int64, error) {
 	var n int64
 
-	if err := binary.Write(w, binary.BigEndian, uint16(len(r.Topics))); err != nil {
+	if err := binary.Write(w, binary.BigEndian, uint16(len(s.Topics))); err != nil {
 		return 0, err
 	}
 
 	n += 2
 
-	for i := 0; i < len(r.Topics); i++ {
-		_n, err := r.Topics[i].WriteTo(w)
+	for i := 0; i < len(s.Topics); i++ {
+		_n, err := s.Topics[i].WriteTo(w)
 		if err != nil {
 			return n, err
 		}
 
 		n += _n
 	}
+
+	return n, nil
+}
+
+// ReadFrom - Reads subscription request from stream
+func (s *NewSubRequest) ReadFrom(r io.Reader) (int64, error) {
+	var n int64
+
+	var size uint16
+	if err := binary.Read(r, binary.BigEndian, &size); err != nil {
+		return n, err
+	}
+
+	n += 2
+	buf := make([]pubsub.String, 0, size)
+
+	for i := 0; i < int(size); i++ {
+		topic := new(pubsub.String)
+		_n, err := topic.ReadFrom(r)
+		if err != nil {
+			return n, err
+		}
+
+		n += _n
+		buf = append(buf, *topic)
+	}
+
+	s.Topics = buf
 
 	return n, nil
 }
