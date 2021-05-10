@@ -70,6 +70,7 @@ type AddSubRequest struct {
 	Topics []pubsub.String
 }
 
+// WriteTo - Client uses it to write request to stream
 func (a *AddSubRequest) WriteTo(w io.Writer) (int64, error) {
 	var n int64
 
@@ -93,6 +94,42 @@ func (a *AddSubRequest) WriteTo(w io.Writer) (int64, error) {
 
 		n += _n
 	}
+
+	return n, nil
+}
+
+// ReadFrom - PubManager uses it to recover request content
+// from stream
+func (a *AddSubRequest) ReadFrom(r io.Reader) (int64, error) {
+	var n int64
+
+	var id uint64
+	if err := binary.Read(r, binary.BigEndian, &id); err != nil {
+		return n, err
+	}
+
+	n += 8
+	var size uint16
+	if err := binary.Read(r, binary.BigEndian, &size); err != nil {
+		return n, err
+	}
+
+	n += 2
+	buf := make([]pubsub.String, 0, size)
+
+	for i := 0; i < int(size); i++ {
+		topic := new(pubsub.String)
+		_n, err := topic.ReadFrom(r)
+		if err != nil {
+			return n, err
+		}
+
+		n += _n
+		buf = append(buf, *topic)
+	}
+
+	a.Id = id
+	a.Topics = buf
 
 	return n, nil
 }
