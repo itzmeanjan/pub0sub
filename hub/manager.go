@@ -78,7 +78,7 @@ STOP:
 			case MSG_REQ:
 			case ADD_SUB_REQ:
 			case UNSUB_REQ:
-			default:
+			case UNSUPPORTED:
 				break STOP
 			}
 

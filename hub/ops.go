@@ -8,7 +8,8 @@ import (
 type OP uint8
 
 const (
-	PUB_REQ OP = iota + 1
+	UNSUPPORTED OP = iota
+	PUB_REQ
 	NEW_SUB_REQ
 	MSG_REQ
 	ADD_SUB_REQ
@@ -17,10 +18,10 @@ const (
 
 // Reads operation type ( client intension ) from readable stream
 func getOPType(r io.Reader) (OP, error) {
-	var op OP
+	var op uint8
 	if err := binary.Read(r, binary.BigEndian, &op); err != nil {
-		return 0, err
+		return UNSUPPORTED, err
 	}
 
-	return op, nil
+	return OP(op), nil
 }
