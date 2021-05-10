@@ -64,4 +64,35 @@ func (s *NewSubRequest) ReadFrom(r io.Reader) (int64, error) {
 	return n, nil
 }
 
-type AddSubRequest struct{}
+// AddSubRequest - Add subscriptions to more topics on-the-fly
+type AddSubRequest struct {
+	Id     uint64
+	Topics []pubsub.String
+}
+
+func (a *AddSubRequest) WriteTo(w io.Writer) (int64, error) {
+	var n int64
+
+	if err := binary.Write(w, binary.BigEndian, a.Id); err != nil {
+		return n, err
+	}
+
+	n += 8
+
+	if err := binary.Write(w, binary.BigEndian, uint16(len(a.Topics))); err != nil {
+		return 0, err
+	}
+
+	n += 2
+
+	for i := 0; i < len(a.Topics); i++ {
+		_n, err := a.Topics[i].WriteTo(w)
+		if err != nil {
+			return n, err
+		}
+
+		n += _n
+	}
+
+	return n, nil
+}
