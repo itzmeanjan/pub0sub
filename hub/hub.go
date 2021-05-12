@@ -30,10 +30,29 @@ func (h *Hub) nextId() uint64 {
 
 // queued - Manager to check whether it has anything to act on
 func (h *Hub) queued() bool {
+	h.queueLock.RLock()
+	defer h.queueLock.RUnlock()
+
+	return len(h.pendingQueue) != 0
+}
+
+// next - Next queued message for manager to act on, if any
+func (h *Hub) next() *pubsub.Message {
+	if !h.queued() {
+		return nil
+	}
+
 	h.queueLock.Lock()
 	defer h.queueLock.Unlock()
 
-	return len(h.pendingQueue) != 0
+	msg := h.pendingQueue[0]
+
+	len := len(h.pendingQueue)
+	copy(h.pendingQueue[:], h.pendingQueue[1:])
+	h.pendingQueue[len-1] = nil
+	h.pendingQueue = h.pendingQueue[:len-1]
+
+	return msg
 }
 
 // Subscribe - Client sends subscription request with a non-empty list
