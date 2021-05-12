@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net"
+	"time"
 
 	"github.com/itzmeanjan/pubsub"
 )
@@ -44,7 +45,10 @@ func (p *Publisher) start(ctx context.Context, running chan struct{}) {
 // New - New publisher instance, attempts to establish connection with remote
 // & returns handle with open connection, ready for use
 func New(ctx context.Context, proto, addr string) (*Publisher, error) {
-	var d net.Dialer
+	d := net.Dialer{
+		Timeout:  time.Duration(10) * time.Second,
+		Deadline: time.Now().Add(time.Duration(20) * time.Second),
+	}
 
 	conn, err := d.DialContext(ctx, proto, addr)
 	if err != nil {
