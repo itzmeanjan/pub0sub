@@ -89,6 +89,17 @@ func (h *Hub) unsubscribe(subId uint64, topics ...string) {
 	}
 }
 
+func (h *Hub) Publish(msg *pubsub.Message) {
+	if len(msg.Topics) == 0 {
+		return
+	}
+
+	h.queueLock.Lock()
+	defer h.queueLock.Unlock()
+
+	h.pendingQueue = append(h.pendingQueue, msg)
+}
+
 // StartHub - Starts underlying pub/sub hub, this is the instance
 // to be used for communication from connection managers
 func StartHub(ctx context.Context) *pubsub.PubSub {
