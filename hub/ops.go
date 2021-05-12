@@ -8,7 +8,7 @@ import (
 type OP uint8
 
 const (
-	UNSUPPORTED OP = iota
+	UNSUPPORTED OP = iota + 1
 	PUB_REQ
 	NEW_SUB_REQ
 	MSG_REQ
