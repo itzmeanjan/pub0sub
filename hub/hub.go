@@ -28,6 +28,14 @@ func (h *Hub) nextId() uint64 {
 	return id
 }
 
+// queued - Manager to check whether it has anything to act on
+func (h *Hub) queued() bool {
+	h.queueLock.Lock()
+	defer h.queueLock.Unlock()
+
+	return len(h.pendingQueue) != 0
+}
+
 // Subscribe - Client sends subscription request with a non-empty list
 // of topics it's interested in
 func (h *Hub) Subscribe(topics ...string) {
