@@ -29,7 +29,7 @@ func (h *Hub) nextId() uint64 {
 }
 
 // queued - Manager to check whether it has anything to act on
-func (h *Hub) queued() bool {
+func (h *Hub) Queued() bool {
 	h.queueLock.RLock()
 	defer h.queueLock.RUnlock()
 
@@ -37,8 +37,8 @@ func (h *Hub) queued() bool {
 }
 
 // next - Next queued message for manager to act on, if any
-func (h *Hub) next() *pubsub.Message {
-	if !h.queued() {
+func (h *Hub) Next() *pubsub.Message {
+	if !h.Queued() {
 		return nil
 	}
 
