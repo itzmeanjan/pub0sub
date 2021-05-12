@@ -58,3 +58,19 @@ func (s *Subscriber) Unsubscribe(topics ...string) uint64 {
 
 	return unsubCount
 }
+
+// UnsubscribeAll - Client not interested in receiving any messages
+// from any of currently subscribed topics
+func (s *Subscriber) UnsubscribeAll() uint64 {
+	s.topicLock.Lock()
+	defer s.topicLock.Unlock()
+
+	var unsubCount uint64
+
+	for topic := range s.Topics {
+		delete(s.Topics, topic)
+		unsubCount++
+	}
+
+	return unsubCount
+}
