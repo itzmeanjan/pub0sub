@@ -1,7 +1,6 @@
 package hub
 
 import (
-	"context"
 	"sync"
 
 	"github.com/itzmeanjan/pubsub"
@@ -52,6 +51,8 @@ func (h *Hub) Subscribe(topics ...string) {
 	}
 }
 
+// addSubscription - Subscriber showing intent of receiving messages
+// from a non-empty set of topics [ on-the-fly i.e. after subscriber has been registered ]
 func (h *Hub) addSubscription(subId uint64, topics ...string) {
 	if len(topics) == 0 {
 		return
@@ -71,6 +72,8 @@ func (h *Hub) addSubscription(subId uint64, topics ...string) {
 	}
 }
 
+// unsubscribe - Subscriber shows intent of not receiving messages
+// from non-empty set of topics
 func (h *Hub) unsubscribe(subId uint64, topics ...string) {
 	if len(topics) == 0 {
 		return
@@ -85,10 +88,12 @@ func (h *Hub) unsubscribe(subId uint64, topics ...string) {
 			continue
 		}
 
-		subs[subId] = false
+		delete(subs, subId)
 	}
 }
 
+// Publish - Publisher to invoke when needed, will queue message
+// & to be acted on soon
 func (h *Hub) Publish(msg *pubsub.Message) {
 	if len(msg.Topics) == 0 {
 		return
@@ -98,14 +103,4 @@ func (h *Hub) Publish(msg *pubsub.Message) {
 	defer h.queueLock.Unlock()
 
 	h.pendingQueue = append(h.pendingQueue, msg)
-}
-
-// StartHub - Starts underlying pub/sub hub, this is the instance
-// to be used for communication from connection managers
-func StartHub(ctx context.Context) *pubsub.PubSub {
-	hub := pubsub.New(ctx)
-	if !hub.IsAlive() {
-		return nil
-	}
-	return hub
 }
