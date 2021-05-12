@@ -52,6 +52,25 @@ func (h *Hub) Subscribe(topics ...string) {
 	}
 }
 
+func (h *Hub) addSubscription(subId uint64, topics ...string) {
+	if len(topics) == 0 {
+		return
+	}
+
+	h.subLock.Lock()
+	defer h.subLock.Unlock()
+
+	for i := 0; i < len(topics); i++ {
+		subs, ok := h.subscribers[topics[i]]
+		if !ok {
+			subs = make(map[uint64]bool)
+		}
+
+		subs[subId] = true
+		h.subscribers[topics[i]] = subs
+	}
+}
+
 // StartHub - Starts underlying pub/sub hub, this is the instance
 // to be used for communication from connection managers
 func StartHub(ctx context.Context) *pubsub.PubSub {
