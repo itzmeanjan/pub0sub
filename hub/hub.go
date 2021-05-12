@@ -29,6 +29,29 @@ func (h *Hub) nextId() uint64 {
 	return id
 }
 
+// Subscribe - Client sends subscription request with a non-empty list
+// of topics it's interested in
+func (h *Hub) Subscribe(topics ...string) {
+	if len(topics) == 0 {
+		return
+	}
+
+	id := h.nextId()
+
+	h.subLock.Lock()
+	defer h.subLock.Unlock()
+
+	for i := 0; i < len(topics); i++ {
+		subs, ok := h.subscribers[topics[i]]
+		if !ok {
+			subs = make(map[uint64]bool)
+		}
+
+		subs[id] = true
+		h.subscribers[topics[i]] = subs
+	}
+}
+
 // StartHub - Starts underlying pub/sub hub, this is the instance
 // to be used for communication from connection managers
 func StartHub(ctx context.Context) *pubsub.PubSub {
