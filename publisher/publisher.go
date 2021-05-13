@@ -2,6 +2,7 @@ package publisher
 
 import (
 	"context"
+	"encoding/binary"
 	"log"
 	"net"
 	"time"
@@ -26,20 +27,60 @@ type msgPublishRequest struct {
 // acts on it & responds back
 func (p *Publisher) start(ctx context.Context, running chan struct{}) {
 	close(running)
+	defer func() {
+		if err := p.conn.Close(); err != nil {
+			log.Printf("[pub0sub] Error : %s\n", err.Error())
+		}
+	}()
 
 	for {
 		select {
 		case <-ctx.Done():
-			if err := p.conn.Close(); err != nil {
-				log.Printf("[pub0sub] Error : %s\n", err.Error())
-			}
 			return
 
 		case req := <-p.msgChan:
-			req.resChan <- 0
+			receiverC, err := p.send(req.msg)
+			if err != nil {
+				if nErr, ok := err.(net.Error); ok && !nErr.Temporary() {
+					req.resChan <- 0
+					return
+				}
+			}
+
+			req.resChan <- receiverC
 
 		}
 	}
+}
+
+// send - Writes publish intent message to stream & reads response back
+func (p *Publisher) send(msg *pubsub.Message) (uint64, error) {
+
+	if err := binary.Write(p.conn, binary.BigEndian, uint32(len(msg.Topics))); err != nil {
+		return 0, err
+	}
+
+	for i := 0; i < len(msg.Topics); i++ {
+		if err := binary.Write(p.conn, binary.BigEndian, uint32(len(msg.Topics[i]))); err != nil {
+			return 0, err
+		}
+
+		if n, err := p.conn.Write([]byte(msg.Topics[i])); n != len(msg.Topics[i]) {
+			return 0, err
+		}
+	}
+
+	if err := binary.Write(p.conn, binary.BigEndian, uint32(len(msg.Data))); err != nil {
+		return 0, err
+	}
+
+	if n, err := p.conn.Write(msg.Data); n != len(msg.Data) {
+		return 0, err
+	}
+
+	// reading to be implemented
+	return 0, nil
+
 }
 
 // New - New publisher instance, attempts to establish connection with remote
