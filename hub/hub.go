@@ -3,7 +3,7 @@ package hub
 import (
 	"sync"
 
-	"github.com/itzmeanjan/pubsub"
+	"github.com/itzmeanjan/pub0sub/ops"
 )
 
 // Hub - Abstraction between message publishers & subscribers,
@@ -14,7 +14,7 @@ type Hub struct {
 	subLock      *sync.RWMutex
 	subscribers  map[string]map[uint64]bool
 	queueLock    *sync.RWMutex
-	pendingQueue []*pubsub.Message
+	pendingQueue []*ops.Msg
 }
 
 // nextId - Generates next subscriber id [ concurrrent-safe ]
@@ -37,7 +37,7 @@ func (h *Hub) Queued() bool {
 }
 
 // next - Next queued message for manager to act on, if any
-func (h *Hub) Next() *pubsub.Message {
+func (h *Hub) Next() *ops.Msg {
 	if !h.Queued() {
 		return nil
 	}
@@ -121,7 +121,7 @@ func (h *Hub) unsubscribe(subId uint64, topics ...string) {
 
 // Publish - Publisher to invoke when needed, will queue message
 // & to be acted on soon
-func (h *Hub) Publish(msg *pubsub.Message) {
+func (h *Hub) Publish(msg *ops.Msg) {
 	if len(msg.Topics) == 0 {
 		return
 	}
