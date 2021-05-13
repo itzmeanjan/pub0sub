@@ -7,11 +7,11 @@ import (
 
 // PubResponse - After sending message publish request to broker
 // publisher expects to hear back with `how many subscribers to receive message ?`
-type PubResponse uint64
+type PubResponse uint32
 
 // WriteTo - Manager writes response received from hub, into stream
 func (p PubResponse) WriteTo(w io.Writer) (int64, error) {
-	return 4, binary.Write(w, binary.BigEndian, uint32(p))
+	return 4, binary.Write(w, binary.BigEndian, p)
 }
 
 // ReadFrom - Publisher reads response from stream
@@ -21,5 +21,7 @@ func (p *PubResponse) ReadFrom(r io.Reader) (int64, error) {
 	if err := binary.Read(r, binary.BigEndian, &v); err != nil {
 		return 0, err
 	}
+
+	*p = PubResponse(v)
 	return 4, nil
 }
