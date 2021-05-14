@@ -30,7 +30,7 @@ func TestPubResponse(t *testing.T) {
 }
 
 func TestNewSubResponse(t *testing.T) {
-	wResp := NewSubResponse(5)
+	wResp := NewSubResponse{Id: 123, TopicCount: 5}
 	stream := new(bytes.Buffer)
 
 	nWrote, err := wResp.WriteTo(stream)
@@ -48,7 +48,11 @@ func TestNewSubResponse(t *testing.T) {
 		t.Errorf("Wrote %d bytes, Read %d bytes\n", nWrote, nRead)
 	}
 
-	if wResp != *rResp {
-		t.Errorf("Wrote %d, Read %d\n", wResp, *rResp)
+	if wResp.Id != rResp.Id {
+		t.Errorf("Wrote Id %d, Read Id %d\n", wResp.Id, rResp.Id)
+	}
+
+	if wResp.TopicCount != rResp.TopicCount {
+		t.Errorf("Wrote topic count %d, Read topic count %d\n", wResp.TopicCount, rResp.TopicCount)
 	}
 }
