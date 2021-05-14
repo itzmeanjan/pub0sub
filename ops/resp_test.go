@@ -28,3 +28,27 @@ func TestPubResponse(t *testing.T) {
 		t.Errorf("Wrote %d, Read %d\n", wResp, *rResp)
 	}
 }
+
+func TestNewSubResponse(t *testing.T) {
+	wResp := NewSubResponse(5)
+	stream := new(bytes.Buffer)
+
+	nWrote, err := wResp.WriteTo(stream)
+	if err != nil {
+		t.Errorf("Failed to write : %s\n", err.Error())
+	}
+
+	rResp := new(NewSubResponse)
+	nRead, err := rResp.ReadFrom(stream)
+	if err != nil {
+		t.Errorf("Failed to read : %s\n", err.Error())
+	}
+
+	if nWrote != nRead {
+		t.Errorf("Wrote %d bytes, Read %d bytes\n", nWrote, nRead)
+	}
+
+	if wResp != *rResp {
+		t.Errorf("Wrote %d, Read %d\n", wResp, *rResp)
+	}
+}
