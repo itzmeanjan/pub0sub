@@ -2,6 +2,7 @@ package ops
 
 import (
 	"encoding/binary"
+	"errors"
 	"io"
 )
 
@@ -18,6 +19,10 @@ const (
 	ADD_SUB_RESP
 	UNSUB_REQ
 	UNSUB_RESP
+)
+
+var (
+	TerminateConnection = errors.New("unsupported opcode, begin connection tear down")
 )
 
 // WriteTo - Writes operation type to stream, so that
