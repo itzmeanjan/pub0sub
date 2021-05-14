@@ -66,7 +66,7 @@ STOP:
 			switch op {
 			case PUB_REQ:
 			case NEW_SUB_REQ:
-			case MSG_REQ:
+			case MSG_PUSH:
 			case ADD_SUB_REQ:
 			case UNSUB_REQ:
 			case UNSUPPORTED:
