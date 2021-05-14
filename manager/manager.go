@@ -150,6 +150,8 @@ func (m *Manager) listen(ctx context.Context, addr string, hub *hub.Hub, done ch
 
 // handleTCPConnection - Each publisher/ subscriber connection is handled
 // in its own go routine
+//
+// @note Improve error handling
 func handleTCPConnection(ctx context.Context, conn net.Conn, hub *hub.Hub) {
 	defer func() {
 		if err := conn.Close(); err != nil {
@@ -172,6 +174,24 @@ STOP:
 
 			switch *op {
 			case ops.PUB_REQ:
+				msg := new(ops.Msg)
+				if _, err := msg.ReadFrom(conn); err != nil {
+					break STOP
+				}
+
+				// return listener count
+				hub.Publish(msg)
+				rOP := ops.PUB_RESP
+				if _, err := rOP.WriteTo(conn); err != nil {
+					break STOP
+				}
+
+				// fill it up with listener count
+				pResp := ops.PubResponse(0)
+				if _, err := pResp.WriteTo(conn); err != nil {
+					break STOP
+				}
+
 			case ops.NEW_SUB_REQ:
 			case ops.MSG_PUSH:
 			case ops.ADD_SUB_REQ:
