@@ -9,7 +9,7 @@ import (
 // all underlying networking details are kept hidden
 type Subscriber struct {
 	Id        uint64
-	Conn      *net.Conn
+	Conn      net.Conn
 	topicLock *sync.RWMutex
 	Topics    map[string]bool
 }

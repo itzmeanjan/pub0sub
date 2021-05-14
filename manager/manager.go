@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/itzmeanjan/pub0sub/hub"
+	"github.com/itzmeanjan/pub0sub/ops"
 	"github.com/itzmeanjan/pub0sub/subscriber"
 )
 
@@ -29,16 +30,29 @@ func (m *Manager) start(ctx context.Context, running chan struct{}) {
 
 		case <-m.ping:
 			msg := m.hub.Next()
+			op := ops.MSG_PUSH
 
 			for i := 0; i < len(msg.Topics); i++ {
-				_, ok := m.subscribers[msg.Topics[i]]
+				subs, ok := m.subscribers[msg.Topics[i]]
 				if !ok {
 					continue
+				}
+
+				pushMsg := ops.PushedMessage{
+					Topic: msg.Topics[i],
+					Data:  msg.Data,
+				}
+
+				for _, sub := range subs {
+					// handle error
+					op.WriteTo(sub.Conn)
+					pushMsg.WriteTo(sub.Conn)
 				}
 			}
 
 		case <-time.After(time.Duration(100) * time.Millisecond):
 			started := time.Now()
+			op := ops.MSG_PUSH
 
 			for msg := m.hub.Next(); msg != nil; {
 				if time.Since(started) > time.Duration(100)*time.Millisecond {
@@ -46,9 +60,20 @@ func (m *Manager) start(ctx context.Context, running chan struct{}) {
 				}
 
 				for i := 0; i < len(msg.Topics); i++ {
-					_, ok := m.subscribers[msg.Topics[i]]
+					subs, ok := m.subscribers[msg.Topics[i]]
 					if !ok {
 						continue
+					}
+
+					pushMsg := ops.PushedMessage{
+						Topic: msg.Topics[i],
+						Data:  msg.Data,
+					}
+
+					for _, sub := range subs {
+						// handle error
+						op.WriteTo(sub.Conn)
+						pushMsg.WriteTo(sub.Conn)
 					}
 				}
 			}
