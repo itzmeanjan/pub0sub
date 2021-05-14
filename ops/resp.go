@@ -25,3 +25,25 @@ func (p *PubResponse) ReadFrom(r io.Reader) (int64, error) {
 	*p = PubResponse(v)
 	return 4, nil
 }
+
+// NewSubResponse - After sending subscriber registration request
+// along with topic list of interest, it expects to hear back with
+// `how many topics it successfully got subscribed to ?`
+type NewSubResponse uint32
+
+// WriteTo - Writes to stream
+func (n NewSubResponse) WriteTo(w io.Writer) (int64, error) {
+	return 4, binary.Write(w, binary.BigEndian, n)
+}
+
+// ReadFrom - Reads back from stream
+func (n *NewSubResponse) ReadFrom(r io.Reader) (int64, error) {
+	var v uint32
+
+	if err := binary.Read(r, binary.BigEndian, &v); err != nil {
+		return 0, err
+	}
+
+	*n = NewSubResponse(v)
+	return 4, nil
+}
