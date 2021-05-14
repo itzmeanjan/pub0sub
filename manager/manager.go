@@ -33,8 +33,10 @@ func (m *Manager) start(ctx context.Context, running chan struct{}) {
 			op := ops.MSG_PUSH
 
 			for i := 0; i < len(msg.Topics); i++ {
+				m.subLock.RLock()
 				subs, ok := m.subscribers[msg.Topics[i]]
 				if !ok {
+					m.subLock.RUnlock()
 					continue
 				}
 
@@ -48,6 +50,7 @@ func (m *Manager) start(ctx context.Context, running chan struct{}) {
 					op.WriteTo(sub.Conn)
 					pushMsg.WriteTo(sub.Conn)
 				}
+				m.subLock.RUnlock()
 			}
 
 		case <-time.After(time.Duration(100) * time.Millisecond):
@@ -60,8 +63,10 @@ func (m *Manager) start(ctx context.Context, running chan struct{}) {
 				}
 
 				for i := 0; i < len(msg.Topics); i++ {
+					m.subLock.RLock()
 					subs, ok := m.subscribers[msg.Topics[i]]
 					if !ok {
+						m.subLock.RUnlock()
 						continue
 					}
 
@@ -75,6 +80,7 @@ func (m *Manager) start(ctx context.Context, running chan struct{}) {
 						op.WriteTo(sub.Conn)
 						pushMsg.WriteTo(sub.Conn)
 					}
+					m.subLock.RUnlock()
 				}
 			}
 
