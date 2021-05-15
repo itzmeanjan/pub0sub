@@ -21,6 +21,28 @@ type Hub struct {
 	ping         chan struct{}
 }
 
+// publish - Actually writes message, along with opcode
+// to network connection
+func (h *Hub) publish(op *ops.OP, msg *ops.Msg) {
+	h.subLock.RLock()
+	defer h.subLock.RUnlock()
+
+	pushMsg := ops.PushedMessage{Data: msg.Data}
+	for i := 0; i < len(msg.Topics); i++ {
+		subs, ok := h.subscribers[msg.Topics[i]]
+		if !ok {
+			continue
+		}
+
+		pushMsg.Topic = msg.Topics[i]
+		for _, conn := range subs {
+			// handle error
+			op.WriteTo(conn)
+			pushMsg.WriteTo(conn)
+		}
+	}
+}
+
 // Process - Listens for new message ready to published & works on publishing
 // it to all topic subscribers
 func (h *Hub) Process(ctx context.Context, running chan struct{}) {
@@ -34,23 +56,7 @@ func (h *Hub) Process(ctx context.Context, running chan struct{}) {
 		case <-h.ping:
 			msg := h.Next()
 			op := ops.MSG_PUSH
-			pushMsg := ops.PushedMessage{Data: msg.Data}
-
-			h.subLock.RLock()
-			for i := 0; i < len(msg.Topics); i++ {
-				subs, ok := h.subscribers[msg.Topics[i]]
-				if !ok {
-					continue
-				}
-
-				pushMsg.Topic = msg.Topics[i]
-				for _, conn := range subs {
-					// handle error
-					op.WriteTo(conn)
-					pushMsg.WriteTo(conn)
-				}
-			}
-			h.subLock.RUnlock()
+			h.publish(&op, msg)
 
 		case <-time.After(time.Duration(100) * time.Millisecond):
 			started := time.Now()
@@ -61,23 +67,7 @@ func (h *Hub) Process(ctx context.Context, running chan struct{}) {
 					break
 				}
 
-				pushMsg := ops.PushedMessage{Data: msg.Data}
-
-				h.subLock.RLock()
-				for i := 0; i < len(msg.Topics); i++ {
-					subs, ok := h.subscribers[msg.Topics[i]]
-					if !ok {
-						continue
-					}
-
-					pushMsg.Topic = msg.Topics[i]
-					for _, conn := range subs {
-						// handle error
-						op.WriteTo(conn)
-						pushMsg.WriteTo(conn)
-					}
-				}
-				h.subLock.RUnlock()
+				h.publish(&op, msg)
 			}
 
 		}
