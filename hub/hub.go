@@ -1,9 +1,11 @@
 package hub
 
 import (
+	"context"
 	"net"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/itzmeanjan/pub0sub/ops"
 )
@@ -17,6 +19,69 @@ type Hub struct {
 	queueLock    *sync.RWMutex
 	pendingQueue []*ops.Msg
 	ping         chan struct{}
+}
+
+// Process - Listens for new message ready to published & works on publishing
+// it to all topic subscribers
+func (h *Hub) Process(ctx context.Context, running chan struct{}) {
+	close(running)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+
+		case <-h.ping:
+			msg := h.Next()
+			op := ops.MSG_PUSH
+			pushMsg := ops.PushedMessage{Data: msg.Data}
+
+			h.subLock.RLock()
+			for i := 0; i < len(msg.Topics); i++ {
+				subs, ok := h.subscribers[msg.Topics[i]]
+				if !ok {
+					continue
+				}
+
+				pushMsg.Topic = msg.Topics[i]
+				for _, conn := range subs {
+					// handle error
+					op.WriteTo(conn)
+					pushMsg.WriteTo(conn)
+				}
+			}
+			h.subLock.RUnlock()
+
+		case <-time.After(time.Duration(100) * time.Millisecond):
+			started := time.Now()
+			op := ops.MSG_PUSH
+
+			for msg := h.Next(); msg != nil; {
+				if time.Since(started) > time.Duration(100)*time.Millisecond {
+					break
+				}
+
+				pushMsg := ops.PushedMessage{Data: msg.Data}
+
+				h.subLock.RLock()
+				for i := 0; i < len(msg.Topics); i++ {
+					subs, ok := h.subscribers[msg.Topics[i]]
+					if !ok {
+						continue
+					}
+
+					pushMsg.Topic = msg.Topics[i]
+					for _, conn := range subs {
+						// handle error
+						op.WriteTo(conn)
+						pushMsg.WriteTo(conn)
+					}
+				}
+				h.subLock.RUnlock()
+			}
+
+		}
+	}
 }
 
 // nextId - Generates next subscriber id [ concurrrent-safe ]
