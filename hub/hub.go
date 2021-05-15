@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"net"
 	"sync"
 
 	"github.com/itzmeanjan/pub0sub/ops"
@@ -12,7 +13,7 @@ type Hub struct {
 	indexLock    *sync.RWMutex
 	index        uint64
 	subLock      *sync.RWMutex
-	subscribers  map[string]map[uint64]bool
+	subscribers  map[string]map[uint64]net.Conn
 	queueLock    *sync.RWMutex
 	pendingQueue []*ops.Msg
 }
@@ -55,15 +56,9 @@ func (h *Hub) Next() *ops.Msg {
 	return msg
 }
 
-// Subscribe - Client sends subscription request with a non-empty list
-// of topics it's interested in
-func (h *Hub) Subscribe(topics ...string) (uint64, uint32) {
-	if len(topics) == 0 {
-		return 0, 0
-	}
-
+// topicSubscribe - Subscribe client to topics
+func (h *Hub) topicSubscribe(subId uint64, conn net.Conn, topics ...string) uint32 {
 	var count uint32
-	var id = h.nextId()
 
 	h.subLock.Lock()
 	defer h.subLock.Unlock()
@@ -71,75 +66,100 @@ func (h *Hub) Subscribe(topics ...string) (uint64, uint32) {
 	for i := 0; i < len(topics); i++ {
 		subs, ok := h.subscribers[topics[i]]
 		if !ok {
-			subs = make(map[uint64]bool)
-			subs[id] = true
+			subs = make(map[uint64]net.Conn)
+			subs[subId] = conn
 			h.subscribers[topics[i]] = subs
 
 			count++
 			continue
 		}
 
-		if v, ok := subs[id]; ok && v {
+		if v, ok := subs[subId]; ok && v != nil {
 			continue
 		}
 
-		subs[id] = true
+		subs[subId] = conn
 		count++
 	}
 
-	return id, count
+	return count
+}
+
+// Subscribe - Client sends subscription request with a non-empty list
+// of topics it's interested in, for very first time, which is why
+// one unique id to be generated
+func (h *Hub) Subscribe(conn net.Conn, topics ...string) (uint64, uint32) {
+	if len(topics) == 0 {
+		return 0, 0
+	}
+
+	id := h.nextId()
+	return id, h.topicSubscribe(id, conn, topics...)
 }
 
 // AddSubscription - Subscriber showing intent of receiving messages
 // from a non-empty set of topics [ on-the-fly i.e. after subscriber has been registered ]
-func (h *Hub) AddSubscription(subId uint64, topics ...string) {
+func (h *Hub) AddSubscription(subId uint64, conn net.Conn, topics ...string) uint32 {
 	if len(topics) == 0 {
-		return
+		return 0
 	}
 
-	h.subLock.Lock()
-	defer h.subLock.Unlock()
-
-	for i := 0; i < len(topics); i++ {
-		subs, ok := h.subscribers[topics[i]]
-		if !ok {
-			subs = make(map[uint64]bool)
-		}
-
-		subs[subId] = true
-		h.subscribers[topics[i]] = subs
-	}
+	return h.topicSubscribe(subId, conn, topics...)
 }
 
 // Unsubscribe - Subscriber shows intent of not receiving messages
 // from non-empty set of topics
-func (h *Hub) Unsubscribe(subId uint64, topics ...string) {
+func (h *Hub) Unsubscribe(subId uint64, topics ...string) uint32 {
 	if len(topics) == 0 {
-		return
+		return 0
 	}
 
 	h.subLock.Lock()
 	defer h.subLock.Unlock()
 
+	var count uint32
 	for i := 0; i < len(topics); i++ {
 		subs, ok := h.subscribers[topics[i]]
 		if !ok {
 			continue
 		}
 
-		delete(subs, subId)
+		if v, ok := subs[subId]; ok && v != nil {
+			delete(subs, subId)
+			count++
+
+			if len(subs) == 0 {
+				delete(h.subscribers, topics[i])
+			}
+		}
 	}
+	return count
 }
 
-// Publish - Publisher to invoke when needed, will queue message
-// & to be acted on soon
-func (h *Hub) Publish(msg *ops.Msg) {
+// Publish - Message publish request to be enqueued
+// for some worker to process, while this function will
+// calcalate how many clients will receive this message
+// & respond back
+func (h *Hub) Publish(msg *ops.Msg) uint32 {
 	if len(msg.Topics) == 0 {
-		return
+		return 0
 	}
 
 	h.queueLock.Lock()
-	defer h.queueLock.Unlock()
-
 	h.pendingQueue = append(h.pendingQueue, msg)
+	h.queueLock.Unlock()
+
+	h.subLock.RLock()
+	defer h.subLock.RUnlock()
+
+	var count uint32
+	for i := 0; i < len(msg.Topics); i++ {
+		subs, ok := h.subscribers[msg.Topics[i]]
+		if !ok {
+			continue
+		}
+
+		count += uint32(len(subs))
+	}
+	return count
 }
