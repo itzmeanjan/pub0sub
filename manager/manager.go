@@ -31,7 +31,7 @@ func New(ctx context.Context, addr string, ping chan struct{}, hub *hub.Hub) *Ma
 	}
 
 	done := make(chan bool)
-	manager.listen(ctx, addr, hub, done)
+	manager.listen(ctx, addr, done)
 	if !<-done {
 		return nil
 	}
@@ -114,7 +114,7 @@ func (m *Manager) process(ctx context.Context, running chan struct{}) {
 
 // listen - Listens to TCP connection on specified <address:port>
 // accepts those & starts processing
-func (m *Manager) listen(ctx context.Context, addr string, hub *hub.Hub, done chan bool) {
+func (m *Manager) listen(ctx context.Context, addr string, done chan bool) {
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Printf("[pub0sub] Error : %s\n", err.Error())
@@ -143,7 +143,10 @@ func (m *Manager) listen(ctx context.Context, addr string, hub *hub.Hub, done ch
 				break
 			}
 
-			go handleTCPConnection(ctx, conn, hub)
+			func(conn net.Conn) {
+				go m.handleTCPConnection(ctx, conn)
+			}(conn)
+
 		}
 	}
 }
@@ -152,7 +155,7 @@ func (m *Manager) listen(ctx context.Context, addr string, hub *hub.Hub, done ch
 // in its own go routine
 //
 // @note Improve error handling
-func handleTCPConnection(ctx context.Context, conn net.Conn, hub *hub.Hub) {
+func (m *Manager) handleTCPConnection(ctx context.Context, conn net.Conn) {
 	defer func() {
 		if err := conn.Close(); err != nil {
 			log.Printf("[pub0sub] Error : %s\n", err.Error())
@@ -180,9 +183,9 @@ STOP:
 				}
 
 				// return listener count
-				hub.Publish(msg)
-				rOP := ops.PUB_RESP
-				if _, err := rOP.WriteTo(conn); err != nil {
+				m.hub.Publish(msg)
+				rOp := ops.PUB_RESP
+				if _, err := rOp.WriteTo(conn); err != nil {
 					break STOP
 				}
 
@@ -193,6 +196,40 @@ STOP:
 				}
 
 			case ops.NEW_SUB_REQ:
+				msg := new(ops.NewSubscriptionRequest)
+				if _, err := msg.ReadFrom(conn); err != nil {
+					break STOP
+				}
+
+				subId, topicCount := m.hub.Subscribe(msg.Topics...)
+				sub := subscriber.Subscriber{Id: subId, Conn: conn}
+
+				m.subLock.Lock()
+				for i := 0; i < len(msg.Topics); i++ {
+					topic := msg.Topics[i]
+					subs, ok := m.subscribers[topic]
+					if !ok {
+						subs = make(map[uint64]*subscriber.Subscriber)
+						subs[sub.Id] = &sub
+
+						m.subscribers[topic] = subs
+						continue
+					}
+
+					subs[sub.Id] = &sub
+				}
+				m.subLock.Unlock()
+
+				rOp := ops.NEW_SUB_RESP
+				if _, err := rOp.WriteTo(conn); err != nil {
+					break STOP
+				}
+
+				sResp := ops.NewSubResponse{Id: subId, TopicCount: topicCount}
+				if _, err := sResp.WriteTo(conn); err != nil {
+					break STOP
+				}
+
 			case ops.MSG_PUSH:
 			case ops.ADD_SUB_REQ:
 			case ops.UNSUB_REQ:

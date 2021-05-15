@@ -57,12 +57,13 @@ func (h *Hub) Next() *ops.Msg {
 
 // Subscribe - Client sends subscription request with a non-empty list
 // of topics it's interested in
-func (h *Hub) Subscribe(topics ...string) {
+func (h *Hub) Subscribe(topics ...string) (uint64, uint32) {
 	if len(topics) == 0 {
-		return
+		return 0, 0
 	}
 
-	id := h.nextId()
+	var count uint32
+	var id = h.nextId()
 
 	h.subLock.Lock()
 	defer h.subLock.Unlock()
@@ -71,16 +72,27 @@ func (h *Hub) Subscribe(topics ...string) {
 		subs, ok := h.subscribers[topics[i]]
 		if !ok {
 			subs = make(map[uint64]bool)
+			subs[id] = true
+			h.subscribers[topics[i]] = subs
+
+			count++
+			continue
+		}
+
+		if v, ok := subs[id]; ok && v {
+			continue
 		}
 
 		subs[id] = true
-		h.subscribers[topics[i]] = subs
+		count++
 	}
+
+	return id, count
 }
 
-// addSubscription - Subscriber showing intent of receiving messages
+// AddSubscription - Subscriber showing intent of receiving messages
 // from a non-empty set of topics [ on-the-fly i.e. after subscriber has been registered ]
-func (h *Hub) addSubscription(subId uint64, topics ...string) {
+func (h *Hub) AddSubscription(subId uint64, topics ...string) {
 	if len(topics) == 0 {
 		return
 	}
@@ -99,9 +111,9 @@ func (h *Hub) addSubscription(subId uint64, topics ...string) {
 	}
 }
 
-// unsubscribe - Subscriber shows intent of not receiving messages
+// Unsubscribe - Subscriber shows intent of not receiving messages
 // from non-empty set of topics
-func (h *Hub) unsubscribe(subId uint64, topics ...string) {
+func (h *Hub) Unsubscribe(subId uint64, topics ...string) {
 	if len(topics) == 0 {
 		return
 	}
