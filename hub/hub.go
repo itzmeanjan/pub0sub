@@ -149,7 +149,7 @@ STOP:
 					break STOP
 				}
 
-				pResp := ops.PubResponse(subCount)
+				pResp := ops.CountResponse(subCount)
 				if _, err := pResp.WriteTo(conn); err != nil {
 					break STOP
 				}
@@ -172,6 +172,22 @@ STOP:
 				}
 
 			case ops.ADD_SUB_REQ:
+				msg := new(ops.AddSubscriptionRequest)
+				if _, err := msg.ReadFrom(conn); err != nil {
+					break STOP
+				}
+
+				topicCount := h.AddSubscription(msg.Id, conn, msg.Topics...)
+				rOp := ops.ADD_SUB_RESP
+				if _, err := rOp.WriteTo(conn); err != nil {
+					break STOP
+				}
+
+				pResp := ops.CountResponse(topicCount)
+				if _, err := pResp.WriteTo(conn); err != nil {
+					break STOP
+				}
+
 			case ops.UNSUB_REQ:
 			case ops.UNSUPPORTED:
 				break STOP
@@ -235,7 +251,7 @@ func (h *Hub) topicSubscribe(subId uint64, conn net.Conn, topics ...string) uint
 			continue
 		}
 
-		if v, ok := subs[subId]; ok && v != nil {
+		if _, ok := subs[subId]; ok {
 			continue
 		}
 
@@ -285,7 +301,7 @@ func (h *Hub) Unsubscribe(subId uint64, topics ...string) uint32 {
 			continue
 		}
 
-		if v, ok := subs[subId]; ok && v != nil {
+		if _, ok := subs[subId]; ok {
 			delete(subs, subId)
 			count++
 

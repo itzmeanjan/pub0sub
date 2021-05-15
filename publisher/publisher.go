@@ -85,7 +85,7 @@ func (p *Publisher) send(msg *ops.Msg) (uint64, error) {
 	}
 
 	// attempt to read response
-	pResp := new(ops.PubResponse)
+	pResp := new(ops.CountResponse)
 	if _, err := pResp.ReadFrom(p.conn); err != nil {
 		return 0, err
 	}

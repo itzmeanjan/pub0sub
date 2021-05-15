@@ -6,7 +6,7 @@ import (
 )
 
 func TestPubResponse(t *testing.T) {
-	wResp := PubResponse(10)
+	wResp := CountResponse(10)
 	stream := new(bytes.Buffer)
 
 	nWrote, err := wResp.WriteTo(stream)
@@ -14,7 +14,7 @@ func TestPubResponse(t *testing.T) {
 		t.Errorf("Failed to write : %s\n", err.Error())
 	}
 
-	rResp := new(PubResponse)
+	rResp := new(CountResponse)
 	nRead, err := rResp.ReadFrom(stream)
 	if err != nil {
 		t.Errorf("Failed to read : %s\n", err.Error())

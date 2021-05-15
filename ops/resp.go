@@ -5,24 +5,25 @@ import (
 	"io"
 )
 
-// PubResponse - After sending message publish request to broker
-// publisher expects to hear back with `how many subscribers to receive message ?`
-type PubResponse uint32
+// CountResponse - Lets publisher/ subscriber know of some sort of count
+// which has context specific meaning like `how many topics were successfully
+// subscribed to ?` or `how many subscribers received message ?`
+type CountResponse uint32
 
-// WriteTo - Manager writes response received from hub, into stream
-func (p PubResponse) WriteTo(w io.Writer) (int64, error) {
+// WriteTo - Write to stream
+func (p CountResponse) WriteTo(w io.Writer) (int64, error) {
 	return 4, binary.Write(w, binary.BigEndian, p)
 }
 
-// ReadFrom - Publisher reads response from stream
-func (p *PubResponse) ReadFrom(r io.Reader) (int64, error) {
+// ReadFrom - Recover content back from stream
+func (p *CountResponse) ReadFrom(r io.Reader) (int64, error) {
 	var v uint32
 
 	if err := binary.Read(r, binary.BigEndian, &v); err != nil {
 		return 0, err
 	}
 
-	*p = PubResponse(v)
+	*p = CountResponse(v)
 	return 4, nil
 }
 
