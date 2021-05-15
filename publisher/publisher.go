@@ -2,12 +2,11 @@ package publisher
 
 import (
 	"context"
-	"encoding/binary"
 	"log"
 	"net"
 	"time"
 
-	"github.com/itzmeanjan/pubsub"
+	"github.com/itzmeanjan/pub0sub/ops"
 )
 
 // Publisher - Abstraction layer at which publisher operates
@@ -19,7 +18,7 @@ type Publisher struct {
 // msgPublishRequest - Message publish request to be received
 // in this form
 type msgPublishRequest struct {
-	msg     *pubsub.Message
+	msg     *ops.Msg
 	resChan chan uint64
 }
 
@@ -41,6 +40,13 @@ func (p *Publisher) start(ctx context.Context, running chan struct{}) {
 		case req := <-p.msgChan:
 			receiverC, err := p.send(req.msg)
 			if err != nil {
+				// something wrong detected, connection to be
+				// teared down
+				if err == ops.TerminateConnection {
+					req.resChan <- 0
+					return
+				}
+
 				if nErr, ok := err.(net.Error); ok && !nErr.Temporary() {
 					req.resChan <- 0
 					return
@@ -54,32 +60,37 @@ func (p *Publisher) start(ctx context.Context, running chan struct{}) {
 }
 
 // send - Writes publish intent message to stream & reads response back
-func (p *Publisher) send(msg *pubsub.Message) (uint64, error) {
+func (p *Publisher) send(msg *ops.Msg) (uint64, error) {
 
-	if err := binary.Write(p.conn, binary.BigEndian, uint32(len(msg.Topics))); err != nil {
+	// first write opcode
+	op := ops.PUB_REQ
+	if _, err := op.WriteTo(p.conn); err != nil {
 		return 0, err
 	}
 
-	for i := 0; i < len(msg.Topics); i++ {
-		if err := binary.Write(p.conn, binary.BigEndian, uint32(len(msg.Topics[i]))); err != nil {
-			return 0, err
-		}
-
-		if n, err := p.conn.Write([]byte(msg.Topics[i])); n != len(msg.Topics[i]) {
-			return 0, err
-		}
-	}
-
-	if err := binary.Write(p.conn, binary.BigEndian, uint32(len(msg.Data))); err != nil {
+	// then write actual message
+	if _, err := msg.WriteTo(p.conn); err != nil {
 		return 0, err
 	}
 
-	if n, err := p.conn.Write(msg.Data); n != len(msg.Data) {
+	// read peer's opcode i.e. determine message intent
+	rOp := new(ops.OP)
+	if _, err := rOp.ReadFrom(p.conn); err != nil {
 		return 0, err
 	}
 
-	// reading to be implemented
-	return 0, nil
+	// check whether supported or not
+	if *rOp != ops.PUB_RESP {
+		return 0, ops.TerminateConnection
+	}
+
+	// attempt to read response
+	pResp := new(ops.CountResponse)
+	if _, err := pResp.ReadFrom(p.conn); err != nil {
+		return 0, err
+	}
+
+	return uint64(*pResp), nil
 
 }
 
@@ -106,7 +117,7 @@ func New(ctx context.Context, proto, addr string) (*Publisher, error) {
 
 // Publish - Sends message publish request over network,
 // returns back how many of subscribers received this message
-func (p *Publisher) Publish(msg *pubsub.Message) uint64 {
+func (p *Publisher) Publish(msg *ops.Msg) uint64 {
 	resChan := make(chan uint64, 1)
 	p.msgChan <- &msgPublishRequest{msg: msg, resChan: resChan}
 

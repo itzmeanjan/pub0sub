@@ -27,7 +27,7 @@ func TestMessage(t *testing.T) {
 	}
 
 	if wrote != read {
-		t.Errorf("Wrote %d, Read %d\n", wrote, read)
+		t.Errorf("Wrote %d bytes, Read %d bytes\n", wrote, read)
 	}
 
 	if msg.Topics[0] != nMsg.Topics[0] {

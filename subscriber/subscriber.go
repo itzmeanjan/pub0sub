@@ -9,9 +9,9 @@ import (
 // all underlying networking details are kept hidden
 type Subscriber struct {
 	Id        uint64
-	Conn      *net.Conn
+	Conn      net.Conn
 	topicLock *sync.RWMutex
-	Topics    map[string]bool
+	topics    map[string]bool
 }
 
 // AddSubscription - After a subscriber has been created, more topics
@@ -27,10 +27,10 @@ func (s *Subscriber) AddSubscription(topics ...string) uint64 {
 	var subCount uint64
 
 	for i := 0; i < len(topics); i++ {
-		if _, ok := s.Topics[topics[i]]; ok {
+		if _, ok := s.topics[topics[i]]; ok {
 			continue
 		}
-		s.Topics[topics[i]] = true
+		s.topics[topics[i]] = true
 		subCount++
 	}
 
@@ -49,10 +49,10 @@ func (s *Subscriber) Unsubscribe(topics ...string) uint64 {
 	var unsubCount uint64
 
 	for i := 0; i < len(topics); i++ {
-		if _, ok := s.Topics[topics[i]]; !ok {
+		if _, ok := s.topics[topics[i]]; !ok {
 			continue
 		}
-		delete(s.Topics, topics[i])
+		delete(s.topics, topics[i])
 		unsubCount++
 	}
 
@@ -67,8 +67,8 @@ func (s *Subscriber) UnsubscribeAll() uint64 {
 
 	var unsubCount uint64
 
-	for topic := range s.Topics {
-		delete(s.Topics, topic)
+	for topic := range s.topics {
+		delete(s.topics, topic)
 		unsubCount++
 	}
 
