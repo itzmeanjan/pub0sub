@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"log"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -72,6 +73,113 @@ func (h *Hub) Process(ctx context.Context, running chan struct{}) {
 
 		}
 	}
+}
+
+// Listen - Hub listens for TCP connections, accepts those & spawns
+// new go routine for handling each of those
+func (h *Hub) Listen(ctx context.Context, addr string, done chan bool) {
+	lis, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Printf("[pub0sub] Error : %s\n", err.Error())
+
+		done <- false
+		return
+	}
+
+	defer func() {
+		if err := lis.Close(); err != nil {
+			log.Printf("[pub0sub] Error : %s\n", err.Error())
+		}
+	}()
+
+	done <- true
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+
+		default:
+			conn, err := lis.Accept()
+			if err != nil {
+				log.Printf("[pub0sub] Error : %s\n", err.Error())
+				break
+			}
+
+			func(conn net.Conn) {
+				go h.handleTCPConnection(ctx, conn)
+			}(conn)
+
+		}
+	}
+}
+
+// handleTCPConnection - Each publisher, subscriber connection is handled
+// in this method, as seperate go routine
+func (h *Hub) handleTCPConnection(ctx context.Context, conn net.Conn) {
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("[pub0sub] Error : %s\n", err.Error())
+		}
+	}()
+
+STOP:
+	for {
+		select {
+		case <-ctx.Done():
+			return
+
+		default:
+			op := new(ops.OP)
+			_, err := op.ReadFrom(conn)
+			if err != nil {
+				break STOP
+			}
+
+			switch *op {
+			case ops.PUB_REQ:
+				msg := new(ops.Msg)
+				if _, err := msg.ReadFrom(conn); err != nil {
+					break STOP
+				}
+
+				subCount := h.Publish(msg)
+				rOp := ops.PUB_RESP
+				if _, err := rOp.WriteTo(conn); err != nil {
+					break STOP
+				}
+
+				pResp := ops.PubResponse(subCount)
+				if _, err := pResp.WriteTo(conn); err != nil {
+					break STOP
+				}
+
+			case ops.NEW_SUB_REQ:
+				msg := new(ops.NewSubscriptionRequest)
+				if _, err := msg.ReadFrom(conn); err != nil {
+					break STOP
+				}
+
+				subId, topicCount := h.Subscribe(conn, msg.Topics...)
+				rOp := ops.NEW_SUB_RESP
+				if _, err := rOp.WriteTo(conn); err != nil {
+					break STOP
+				}
+
+				sResp := ops.NewSubResponse{Id: subId, TopicCount: topicCount}
+				if _, err := sResp.WriteTo(conn); err != nil {
+					break STOP
+				}
+
+			case ops.ADD_SUB_REQ:
+			case ops.UNSUB_REQ:
+			case ops.UNSUPPORTED:
+				break STOP
+			}
+
+		}
+	}
+
 }
 
 // nextId - Generates next subscriber id [ concurrrent-safe ]
