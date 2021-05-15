@@ -16,6 +16,7 @@ type Hub struct {
 	subscribers  map[string]map[uint64]net.Conn
 	queueLock    *sync.RWMutex
 	pendingQueue []*ops.Msg
+	ping         chan struct{}
 }
 
 // nextId - Generates next subscriber id [ concurrrent-safe ]
@@ -34,7 +35,7 @@ func (h *Hub) Queued() bool {
 	return len(h.pendingQueue) != 0
 }
 
-// next - Next queued message for manager to act on, if any
+// next - Next queued message to act on, if any
 func (h *Hub) Next() *ops.Msg {
 	if !h.Queued() {
 		return nil
@@ -145,6 +146,11 @@ func (h *Hub) Publish(msg *ops.Msg) uint32 {
 	h.queueLock.Lock()
 	h.pendingQueue = append(h.pendingQueue, msg)
 	h.queueLock.Unlock()
+
+	// try to notify, otherwise don't
+	if len(h.ping) < cap(h.ping) {
+		h.ping <- struct{}{}
+	}
 
 	h.subLock.RLock()
 	defer h.subLock.RUnlock()
