@@ -189,8 +189,25 @@ STOP:
 				}
 
 			case ops.UNSUB_REQ:
+				msg := new(ops.UnsubcriptionRequest)
+				if _, err := msg.ReadFrom(conn); err != nil {
+					break STOP
+				}
+
+				topicCount := h.Unsubscribe(msg.Id, msg.Topics...)
+				rOp := ops.UNSUB_RESP
+				if _, err := rOp.WriteTo(conn); err != nil {
+					break STOP
+				}
+
+				pResp := ops.CountResponse(topicCount)
+				if _, err := pResp.WriteTo(conn); err != nil {
+					break STOP
+				}
+
 			case ops.UNSUPPORTED:
 				break STOP
+
 			}
 
 		}
