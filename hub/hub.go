@@ -3,6 +3,7 @@ package hub
 import (
 	"net"
 	"sync"
+	"sync/atomic"
 
 	"github.com/itzmeanjan/pub0sub/ops"
 )
@@ -10,7 +11,6 @@ import (
 // Hub - Abstraction between message publishers & subscribers,
 // works as a multiplexer ( or router )
 type Hub struct {
-	indexLock    *sync.RWMutex
 	index        uint64
 	subLock      *sync.RWMutex
 	subscribers  map[string]map[uint64]net.Conn
@@ -20,11 +20,8 @@ type Hub struct {
 
 // nextId - Generates next subscriber id [ concurrrent-safe ]
 func (h *Hub) nextId() uint64 {
-	h.indexLock.Lock()
-	defer h.indexLock.Unlock()
-
-	id := h.index
-	h.index++
+	id := atomic.LoadUint64(&h.index)
+	atomic.AddUint64(&h.index, 1)
 
 	return id
 }
