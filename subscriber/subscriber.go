@@ -14,12 +14,20 @@ import (
 // Subscriber - Abstraction layer at which subscriber interacts, while
 // all underlying networking details are kept hidden
 type Subscriber struct {
+	id           uint64
+	conn         net.Conn
+	topicLock    *sync.RWMutex
+	topics       map[string]bool
+	bufferLock   *sync.RWMutex
+	buffer       []*ops.PushedMessage
+	newSubChan   chan chan newSubscriptionResponse
+	subUnsubChan chan chan uint32
+	ping         chan struct{}
+}
+
+type newSubscriptionResponse struct {
 	id         uint64
-	conn       net.Conn
-	topicLock  *sync.RWMutex
-	topics     map[string]bool
-	bufferLock *sync.RWMutex
-	buffer     []*ops.PushedMessage
+	topicCount uint32
 }
 
 // New - First time subscribing to a non-empty set of topics, for first time subscription
@@ -41,11 +49,14 @@ func New(ctx context.Context, proto, addr string, cap uint64, topics ...string) 
 	}
 
 	sub := Subscriber{
-		conn:       conn,
-		topicLock:  &sync.RWMutex{},
-		topics:     make(map[string]bool),
-		bufferLock: &sync.RWMutex{},
-		buffer:     make([]*ops.PushedMessage, 0, cap),
+		conn:         conn,
+		topicLock:    &sync.RWMutex{},
+		topics:       make(map[string]bool),
+		bufferLock:   &sync.RWMutex{},
+		buffer:       make([]*ops.PushedMessage, 0, cap),
+		newSubChan:   make(chan chan newSubscriptionResponse, 1),
+		subUnsubChan: make(chan chan uint32, 1),
+		ping:         make(chan struct{}, cap),
 	}
 
 	running := make(chan struct{})
@@ -96,7 +107,10 @@ func (s *Subscriber) listen(ctx context.Context, running chan struct{}) {
 					}
 				}
 
-				s.id = sResp.Id
+				if len(s.newSubChan) != 0 {
+					resp := <-s.newSubChan
+					resp <- newSubscriptionResponse{id: sResp.Id, topicCount: sResp.TopicCount}
+				}
 
 			case ops.ADD_SUB_RESP:
 				aResp := new(ops.CountResponse)
@@ -106,12 +120,22 @@ func (s *Subscriber) listen(ctx context.Context, running chan struct{}) {
 					}
 				}
 
+				if len(s.subUnsubChan) != 0 {
+					resp := <-s.subUnsubChan
+					resp <- uint32(*aResp)
+				}
+
 			case ops.UNSUB_RESP:
 				aResp := new(ops.CountResponse)
 				if _, err := aResp.ReadFrom(s.conn); err != nil {
 					if nErr, ok := err.(net.Error); ok && !nErr.Temporary() {
 						return
 					}
+				}
+
+				if len(s.subUnsubChan) != 0 {
+					resp := <-s.subUnsubChan
+					resp <- uint32(*aResp)
 				}
 
 			case ops.MSG_PUSH:
@@ -125,6 +149,11 @@ func (s *Subscriber) listen(ctx context.Context, running chan struct{}) {
 				s.bufferLock.Lock()
 				s.buffer = append(s.buffer, msg)
 				s.bufferLock.Unlock()
+
+				// notify if possible
+				if len(s.ping) < cap(s.ping) {
+					s.ping <- struct{}{}
+				}
 
 			default:
 				return
@@ -233,6 +262,14 @@ func (s *Subscriber) UnsubscribeAll() (uint64, error) {
 	}
 
 	return unsubCount, nil
+}
+
+// Watch - Watch if new message has arrived in mailbox
+//
+// Note: If subscriber is slow & more messages come in, some
+// notifications may be missed ( not sent to be clear )
+func (s *Subscriber) Watch() chan struct{} {
+	return s.ping
 }
 
 // Queued - Checks existance of any consumable message in buffer
