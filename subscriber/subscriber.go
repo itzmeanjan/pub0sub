@@ -43,20 +43,50 @@ func (s *Subscriber) listen(ctx context.Context, running chan struct{}) {
 				}
 			}
 
-			if *op != ops.MSG_PUSH {
-				return
-			}
-
-			msg := new(ops.PushedMessage)
-			if _, err := msg.ReadFrom(s.conn); err != nil {
-				if nErr, ok := err.(net.Error); ok && !nErr.Temporary() {
-					return
+			switch *op {
+			case ops.NEW_SUB_RESP:
+				sResp := new(ops.NewSubResponse)
+				if _, err := sResp.ReadFrom(s.conn); err != nil {
+					if nErr, ok := err.(net.Error); ok && !nErr.Temporary() {
+						return
+					}
 				}
+
+				s.id = sResp.Id
+
+			case ops.ADD_SUB_RESP:
+				aResp := new(ops.CountResponse)
+				if _, err := aResp.ReadFrom(s.conn); err != nil {
+					if nErr, ok := err.(net.Error); ok && !nErr.Temporary() {
+						return
+					}
+				}
+
+			case ops.UNSUB_RESP:
+				aResp := new(ops.CountResponse)
+				if _, err := aResp.ReadFrom(s.conn); err != nil {
+					if nErr, ok := err.(net.Error); ok && !nErr.Temporary() {
+						return
+					}
+				}
+
+			case ops.MSG_PUSH:
+				msg := new(ops.PushedMessage)
+				if _, err := msg.ReadFrom(s.conn); err != nil {
+					if nErr, ok := err.(net.Error); ok && !nErr.Temporary() {
+						return
+					}
+				}
+
+				s.bufferLock.Lock()
+				s.buffer = append(s.buffer, msg)
+				s.bufferLock.Unlock()
+
+			default:
+				return
+
 			}
 
-			s.bufferLock.Lock()
-			s.buffer = append(s.buffer, msg)
-			s.bufferLock.Unlock()
 		}
 	}
 }
