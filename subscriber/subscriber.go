@@ -52,7 +52,7 @@ func New(ctx context.Context, proto, addr string, cap uint64, topics ...string) 
 	go sub.listen(ctx, running)
 	<-running
 
-	op := ops.ADD_SUB_REQ
+	op := ops.NEW_SUB_REQ
 	if _, err := op.WriteTo(sub.conn); err != nil {
 		return nil, err
 	}
@@ -135,15 +135,17 @@ func (s *Subscriber) listen(ctx context.Context, running chan struct{}) {
 	}
 }
 
-// AddSubscription - After a subscriber has been created, more topics
-// can be subscribed to
-func (s *Subscriber) AddSubscription(topics ...string) uint64 {
+// AddSubscription - After a subscriber has been registered ( knows its ID ),
+// more topics can be subscribed to
+func (s *Subscriber) AddSubscription(topics ...string) (uint64, error) {
 	if len(topics) == 0 {
-		return 0
+		return 0, nil
 	}
 
 	s.topicLock.Lock()
 	defer s.topicLock.Unlock()
+
+	_topics := make([]string, 0, len(topics))
 
 	var subCount uint64
 
@@ -153,9 +155,19 @@ func (s *Subscriber) AddSubscription(topics ...string) uint64 {
 		}
 		s.topics[topics[i]] = true
 		subCount++
+		_topics = append(_topics, topics[i])
 	}
 
-	return subCount
+	op := ops.ADD_SUB_REQ
+	if _, err := op.WriteTo(s.conn); err != nil {
+		return 0, err
+	}
+	sReq := ops.AddSubscriptionRequest{Id: s.id, Topics: _topics}
+	if _, err := sReq.WriteTo(s.conn); err != nil {
+		return 0, err
+	}
+
+	return subCount, nil
 }
 
 // Unsubscribe - Unsubscribe from a non-empty set of topics
