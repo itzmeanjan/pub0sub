@@ -1,17 +1,64 @@
 package subscriber
 
 import (
+	"context"
+	"log"
 	"net"
 	"sync"
+
+	"github.com/itzmeanjan/pub0sub/ops"
 )
 
 // Subscriber - Abstraction layer at which subscriber interacts, while
 // all underlying networking details are kept hidden
 type Subscriber struct {
-	Id        uint64
-	Conn      net.Conn
-	topicLock *sync.RWMutex
-	topics    map[string]bool
+	id         uint64
+	conn       net.Conn
+	topicLock  *sync.RWMutex
+	topics     map[string]bool
+	bufferLock *sync.RWMutex
+	buffer     []*ops.PushedMessage
+}
+
+// listen - Keeps waiting for new message arrival from HUB & buffers them
+// so that subscriber can pull it from queue
+func (s *Subscriber) listen(ctx context.Context, running chan struct{}) {
+	close(running)
+	defer func() {
+		if err := s.conn.Close(); err != nil {
+			log.Printf("[pub0sub] Error : %s\n", err.Error())
+		}
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+
+		default:
+			op := new(ops.OP)
+			if _, err := op.ReadFrom(s.conn); err != nil {
+				if nErr, ok := err.(net.Error); ok && !nErr.Temporary() {
+					return
+				}
+			}
+
+			if *op != ops.MSG_PUSH {
+				return
+			}
+
+			msg := new(ops.PushedMessage)
+			if _, err := msg.ReadFrom(s.conn); err != nil {
+				if nErr, ok := err.(net.Error); ok && !nErr.Temporary() {
+					return
+				}
+			}
+
+			s.bufferLock.Lock()
+			s.buffer = append(s.buffer, msg)
+			s.bufferLock.Unlock()
+		}
+	}
 }
 
 // AddSubscription - After a subscriber has been created, more topics
