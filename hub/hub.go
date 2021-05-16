@@ -233,12 +233,12 @@ func (h *Hub) Queued() bool {
 
 // next - Next queued message to act on, if any
 func (h *Hub) Next() *ops.Msg {
-	if !h.Queued() {
-		return nil
-	}
-
 	h.queueLock.Lock()
 	defer h.queueLock.Unlock()
+
+	if len(h.pendingQueue) == 0 {
+		return nil
+	}
 
 	msg := h.pendingQueue[0]
 

@@ -245,12 +245,12 @@ func (s *Subscriber) Queued() bool {
 
 // Next - Pulls out oldest queued message from buffer
 func (s *Subscriber) Next() *ops.PushedMessage {
-	if !s.Queued() {
-		return nil
-	}
-
 	s.bufferLock.Lock()
 	defer s.bufferLock.Unlock()
+
+	if len(s.buffer) == 0 {
+		return nil
+	}
 
 	msg := s.buffer[0]
 
