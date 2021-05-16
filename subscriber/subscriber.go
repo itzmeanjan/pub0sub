@@ -234,3 +234,30 @@ func (s *Subscriber) UnsubscribeAll() (uint64, error) {
 
 	return unsubCount, nil
 }
+
+// Queued - Checks existance of any consumable message in buffer
+func (s *Subscriber) Queued() bool {
+	s.bufferLock.RLock()
+	defer s.bufferLock.RUnlock()
+
+	return len(s.buffer) != 0
+}
+
+// Next - Pulls out oldest queued message from buffer
+func (s *Subscriber) Next() *ops.PushedMessage {
+	if !s.Queued() {
+		return nil
+	}
+
+	s.bufferLock.Lock()
+	defer s.bufferLock.Unlock()
+
+	msg := s.buffer[0]
+
+	len := len(s.buffer)
+	copy(s.buffer[:], s.buffer[1:])
+	s.buffer[len-1] = nil
+	s.buffer = s.buffer[:len-1]
+
+	return msg
+}
