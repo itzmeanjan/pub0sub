@@ -54,7 +54,7 @@ func New(ctx context.Context, proto, addr string, cap uint64, topics ...string) 
 		topics:       make(map[string]bool),
 		bufferLock:   &sync.RWMutex{},
 		buffer:       make([]*ops.PushedMessage, 0, cap),
-		newSubChan:   make(chan chan newSubscriptionResponse, 1),
+		newSubChan:   make(chan chan newSubscriptionResponse),
 		subUnsubChan: make(chan chan uint32, 1),
 		ping:         make(chan struct{}, cap),
 	}
@@ -72,6 +72,11 @@ func New(ctx context.Context, proto, addr string, cap uint64, topics ...string) 
 		return nil, err
 	}
 
+	resChan := make(chan newSubscriptionResponse)
+	sub.newSubChan <- resChan
+	res := <-resChan
+
+	sub.id = res.id
 	return &sub, nil
 }
 
@@ -107,10 +112,8 @@ func (s *Subscriber) listen(ctx context.Context, running chan struct{}) {
 					}
 				}
 
-				if len(s.newSubChan) != 0 {
-					resp := <-s.newSubChan
-					resp <- newSubscriptionResponse{id: sResp.Id, topicCount: sResp.TopicCount}
-				}
+				resp := <-s.newSubChan
+				resp <- newSubscriptionResponse{id: sResp.Id, topicCount: sResp.TopicCount}
 
 			case ops.ADD_SUB_RESP:
 				aResp := new(ops.CountResponse)
