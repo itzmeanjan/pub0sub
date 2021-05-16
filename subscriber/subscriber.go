@@ -169,102 +169,95 @@ func (s *Subscriber) listen(ctx context.Context, running chan struct{}) {
 
 // AddSubscription - After a subscriber has been registered ( knows its ID ),
 // more topics can be subscribed to
-func (s *Subscriber) AddSubscription(topics ...string) (uint64, error) {
+func (s *Subscriber) AddSubscription(topics ...string) (uint32, error) {
 	if len(topics) == 0 {
 		return 0, errors.New("non-empty topic set required")
 	}
 
 	s.topicLock.Lock()
-	defer s.topicLock.Unlock()
-
-	_topics := make([]string, 0, len(topics))
-
-	var subCount uint64
-
 	for i := 0; i < len(topics); i++ {
 		if _, ok := s.topics[topics[i]]; ok {
 			continue
 		}
-		_topics = append(_topics, topics[i])
 		s.topics[topics[i]] = true
-		subCount++
 	}
+	s.topicLock.Unlock()
 
 	op := ops.ADD_SUB_REQ
 	if _, err := op.WriteTo(s.conn); err != nil {
 		return 0, err
 	}
-	sReq := ops.AddSubscriptionRequest{Id: s.id, Topics: _topics}
+	sReq := ops.AddSubscriptionRequest{Id: s.id, Topics: topics}
 	if _, err := sReq.WriteTo(s.conn); err != nil {
 		return 0, err
 	}
 
-	return subCount, nil
+	resChan := make(chan uint32)
+	s.subUnsubChan <- resChan
+
+	return <-resChan, nil
 }
 
 // Unsubscribe - Unsubscribe from a non-empty set of topics, no
 // message to be received from those anymore
-func (s *Subscriber) Unsubscribe(topics ...string) (uint64, error) {
+func (s *Subscriber) Unsubscribe(topics ...string) (uint32, error) {
 	if len(topics) == 0 {
 		return 0, errors.New("non-empty topic set required")
 	}
 
 	s.topicLock.Lock()
-	defer s.topicLock.Unlock()
-
-	_topics := make([]string, 0, len(topics))
-
-	var unsubCount uint64
 	for i := 0; i < len(topics); i++ {
 		if _, ok := s.topics[topics[i]]; !ok {
 			continue
 		}
-		_topics = append(_topics, topics[i])
 		delete(s.topics, topics[i])
-		unsubCount++
 	}
+	s.topicLock.Unlock()
 
 	op := ops.UNSUB_REQ
 	if _, err := op.WriteTo(s.conn); err != nil {
 		return 0, err
 	}
-	uReq := ops.UnsubcriptionRequest{Id: s.id, Topics: _topics}
+	uReq := ops.UnsubcriptionRequest{Id: s.id, Topics: topics}
 	if _, err := uReq.WriteTo(s.conn); err != nil {
 		return 0, err
 	}
 
-	return unsubCount, nil
+	resChan := make(chan uint32)
+	s.subUnsubChan <- resChan
+
+	return <-resChan, nil
 }
 
 // UnsubscribeAll - Client not interested in receiving any messages
 // from any of currently subscribed topics
-func (s *Subscriber) UnsubscribeAll() (uint64, error) {
+func (s *Subscriber) UnsubscribeAll() (uint32, error) {
 	s.topicLock.Lock()
-	defer s.topicLock.Unlock()
-
 	if len(s.topics) == 0 {
 		return 0, errors.New("no topics to unsubscribe from")
 	}
-
-	_topics := make([]string, 0, len(s.topics))
-
+	topics := make([]string, 0, len(s.topics))
 	var unsubCount uint64
 	for topic := range s.topics {
-		_topics = append(_topics, topic)
+		topics = append(topics, topic)
 		delete(s.topics, topic)
 		unsubCount++
 	}
+	s.topicLock.Unlock()
 
 	op := ops.UNSUB_REQ
 	if _, err := op.WriteTo(s.conn); err != nil {
 		return 0, err
 	}
-	uReq := ops.UnsubcriptionRequest{Id: s.id, Topics: _topics}
+	uReq := ops.UnsubcriptionRequest{Id: s.id, Topics: topics}
 	if _, err := uReq.WriteTo(s.conn); err != nil {
 		return 0, err
 	}
 
-	return unsubCount, nil
+	resChan := make(chan uint32)
+	s.subUnsubChan <- resChan
+
+	return <-resChan, nil
 }
 
 // Watch - Watch if new message has arrived in mailbox
