@@ -2,9 +2,11 @@ package subscriber
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/itzmeanjan/pub0sub/ops"
 )
@@ -18,6 +20,48 @@ type Subscriber struct {
 	topics     map[string]bool
 	bufferLock *sync.RWMutex
 	buffer     []*ops.PushedMessage
+}
+
+// New - First time subscribing to a non-empty set of topics, for first time subscription
+// use this function & then keep using obtained subscriber handle for further communication
+// with HUB
+func New(ctx context.Context, proto, addr string, cap uint64, topics ...string) (*Subscriber, error) {
+	if len(topics) == 0 {
+		return nil, errors.New("non-empty topic set required")
+	}
+
+	d := net.Dialer{
+		Timeout:  time.Duration(10) * time.Second,
+		Deadline: time.Now().Add(time.Duration(20) * time.Second),
+	}
+
+	conn, err := d.DialContext(ctx, proto, addr)
+	if err != nil {
+		return nil, err
+	}
+
+	sub := Subscriber{
+		conn:       conn,
+		topicLock:  &sync.RWMutex{},
+		topics:     make(map[string]bool),
+		bufferLock: &sync.RWMutex{},
+		buffer:     make([]*ops.PushedMessage, 0, cap),
+	}
+
+	running := make(chan struct{})
+	go sub.listen(ctx, running)
+	<-running
+
+	op := ops.ADD_SUB_REQ
+	if _, err := op.WriteTo(sub.conn); err != nil {
+		return nil, err
+	}
+	sReq := ops.NewSubscriptionRequest{Topics: topics}
+	if _, err := sReq.WriteTo(sub.conn); err != nil {
+		return nil, err
+	}
+
+	return &sub, nil
 }
 
 // listen - Keeps waiting for new message arrival from HUB & buffers them
