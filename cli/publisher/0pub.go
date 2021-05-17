@@ -22,12 +22,14 @@ func main() {
 	flag.Parse()
 
 	ctx, cancel := context.WithCancel(context.Background())
-	pub, err := publisher.New(ctx, proto, fmt.Sprintf("%s:%d", *addr, *port))
+	fullAddr := fmt.Sprintf("%s:%d", *addr, *port)
+	pub, err := publisher.New(ctx, proto, fullAddr)
 	if err != nil {
 		log.Printf("[0pub] Error : %s\n", err.Error())
 		return
 	}
 
+	log.Printf("[0pub] Connected to %s\n", fullAddr)
 	msg := ops.Msg{Topics: []string{*topic}, Data: []byte(*data)}
 	log.Printf("[0pub] Approximate message reach %d\n", pub.Publish(&msg))
 
