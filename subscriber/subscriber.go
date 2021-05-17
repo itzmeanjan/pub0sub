@@ -101,6 +101,7 @@ func (s *Subscriber) listen(ctx context.Context, running chan struct{}) {
 				if nErr, ok := err.(net.Error); ok && !nErr.Temporary() {
 					return
 				}
+				break
 			}
 
 			switch *op {

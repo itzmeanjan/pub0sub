@@ -37,9 +37,12 @@ func (h *Hub) publish(op *ops.OP, msg *ops.Msg) {
 
 		pushMsg.Topic = msg.Topics[i]
 		for _, conn := range subs {
-			// handle error
-			op.WriteTo(conn)
-			pushMsg.WriteTo(conn)
+			if _, err := op.WriteTo(conn); err != nil {
+				continue
+			}
+			if _, err := pushMsg.WriteTo(conn); err != nil {
+				continue
+			}
 		}
 	}
 }
