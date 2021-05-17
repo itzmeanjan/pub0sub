@@ -59,6 +59,10 @@ func New(ctx context.Context, proto, addr string, cap uint64, topics ...string) 
 		ping:         make(chan struct{}, cap),
 	}
 
+	for _, topic := range topics {
+		sub.topics[topic] = true
+	}
+
 	running := make(chan struct{})
 	go sub.listen(ctx, running)
 	<-running
