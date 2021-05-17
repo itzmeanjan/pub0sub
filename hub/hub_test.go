@@ -19,6 +19,7 @@ func TestHub(t *testing.T) {
 	topics := []string{topic_1}
 	data := []byte("hello")
 	msg := ops.Msg{Topics: topics, Data: data}
+	delay := time.Duration(5) * time.Millisecond
 
 	ctx, cancel := context.WithCancel(context.Background())
 	_, err := New(ctx, addr, capacity)
@@ -40,7 +41,7 @@ func TestHub(t *testing.T) {
 		t.Fatalf("Expected to publish to 1 subscriber, did to %d\n", n)
 	}
 
-	<-time.After(time.Duration(1) * time.Millisecond)
+	<-time.After(delay)
 	conMsg := sub.Next()
 	if conMsg == nil {
 		t.Fatalf("Expected to consume msg, found nothing\n")
@@ -53,5 +54,5 @@ func TestHub(t *testing.T) {
 	}
 
 	cancel()
-	<-time.After(time.Duration(1) * time.Millisecond)
+	<-time.After(delay)
 }

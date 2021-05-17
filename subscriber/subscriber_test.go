@@ -23,6 +23,7 @@ func TestSubscriber(t *testing.T) {
 	msg := ops.Msg{Topics: topics, Data: data}
 	count := uint64(16)
 	subs := make([]*Subscriber, 0, count)
+	delay := time.Duration(5) * time.Millisecond
 
 	ctx, cancel := context.WithCancel(context.Background())
 	_, err := hub.New(ctx, addr, capacity)
@@ -49,7 +50,7 @@ func TestSubscriber(t *testing.T) {
 		t.Fatalf("Expected to publish to %d subscribers, did to %d\n", 2*count, n)
 	}
 
-	<-time.After(time.Duration(5) * time.Millisecond)
+	<-time.After(delay)
 
 	for _, sub := range subs {
 		{
@@ -94,7 +95,7 @@ func TestSubscriber(t *testing.T) {
 		t.Fatalf("Expected to publish to %d subscribers, did to %d\n", 3*count, n)
 	}
 
-	<-time.After(time.Duration(5) * time.Millisecond)
+	<-time.After(delay)
 
 	for _, sub := range subs {
 		{
@@ -161,7 +162,7 @@ func TestSubscriber(t *testing.T) {
 		t.Fatalf("Expected to publish to 0 subscribers, did to %d\n", n)
 	}
 
-	<-time.After(time.Duration(5) * time.Millisecond)
+	<-time.After(delay)
 
 	for i, sub := range subs {
 		if sub.Queued() {
@@ -181,5 +182,5 @@ func TestSubscriber(t *testing.T) {
 	}
 
 	cancel()
-	<-time.After(time.Duration(1) * time.Millisecond)
+	<-time.After(delay)
 }

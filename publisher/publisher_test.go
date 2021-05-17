@@ -21,6 +21,7 @@ func TestPublisher(t *testing.T) {
 	topics := []string{topic_1, topic_2}
 	msg := ops.Msg{Topics: topics}
 	count := 512
+	delay := time.Duration(5) * time.Millisecond
 
 	ctx, cancel := context.WithCancel(context.Background())
 	_, err := hub.New(ctx, addr, capacity)
@@ -45,7 +46,7 @@ func TestPublisher(t *testing.T) {
 		}
 	}
 
-	<-time.After(time.Duration(1) * time.Millisecond)
+	<-time.After(delay)
 
 	for i := 0; i < count; i++ {
 		data := []byte(fmt.Sprintf("%d", i+1))
@@ -78,5 +79,5 @@ func TestPublisher(t *testing.T) {
 	}
 
 	cancel()
-	<-time.After(time.Duration(1) * time.Millisecond)
+	<-time.After(delay)
 }
