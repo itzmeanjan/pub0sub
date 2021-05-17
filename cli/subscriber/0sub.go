@@ -31,6 +31,7 @@ func main() {
 		return
 	}
 
+	log.Printf("[0sub] Connected to %s\n", fullAddr)
 	go func() {
 		for {
 			select {
@@ -40,7 +41,7 @@ func main() {
 
 			case <-sub.Watch():
 				if msg := sub.Next(); msg != nil {
-					log.Printf("[0sub] Received |>| Data : %s, Topic : `%s`\n", msg.Data, msg.Topic)
+					log.Printf("[0sub] Received |>| Data : `%s`, Topic : `%s`\n", msg.Data, msg.Topic)
 				}
 			}
 		}
