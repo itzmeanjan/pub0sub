@@ -11,3 +11,9 @@ build_pub:
 
 pub: build_pub
 	./0pub
+
+build_sub:
+	pushd cli/subscriber; go build -o ../../0sub; popd
+
+sub: build_sub
+	./0sub
