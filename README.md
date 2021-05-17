@@ -3,7 +3,7 @@ Fast, Lightweight Pub/Sub over TCP, QUIC
 
 ## Motivation
 
-Few days back I worked on an _Embeddable, Fast, Light-weight Pub/Sub System for Go Projects_, called `pubsub`, which is built only using native Go functionalities i.e. **go channels**, **go routines** & as the title suggests, you can embed that system in your application for doing in-app message passing using following patterns
+Few days back I worked on an _Embeddable, Fast, Light-weight Pub/Sub System for Go Projects_, called `pubsub`, which is built only using native Go functionalities & as the title suggests, you can embed that system in your application for doing in-app message passing using any of following patterns
 
 - Single Publisher Single Subscriber
 - Single Publisher Multiple Subscriber
