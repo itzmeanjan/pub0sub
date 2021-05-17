@@ -21,9 +21,7 @@ const (
 	UNSUB_RESP
 )
 
-var (
-	TerminateConnection = errors.New("unsupported opcode, begin connection tear down")
-)
+var ErrTerminateConnection = errors.New("unsupported opcode, begin connection tear down")
 
 // WriteTo - Writes operation type to stream, so that
 // receiving party can understand intention of message

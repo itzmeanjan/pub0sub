@@ -2,6 +2,7 @@ package publisher
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net"
 	"time"
@@ -42,7 +43,7 @@ func (p *Publisher) start(ctx context.Context, running chan struct{}) {
 			if err != nil {
 				// something wrong detected, connection to be
 				// teared down
-				if err == ops.TerminateConnection {
+				if errors.Is(err, ops.ErrTerminateConnection) {
 					req.resChan <- 0
 					return
 				}
@@ -81,7 +82,7 @@ func (p *Publisher) send(msg *ops.Msg) (uint64, error) {
 
 	// check whether supported or not
 	if *rOp != ops.PUB_RESP {
-		return 0, ops.TerminateConnection
+		return 0, ops.ErrTerminateConnection
 	}
 
 	// attempt to read response
