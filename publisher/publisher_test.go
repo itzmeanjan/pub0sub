@@ -20,7 +20,8 @@ func TestPublisher(t *testing.T) {
 	topic_2 := "topic_2"
 	topics := []string{topic_1, topic_2}
 	msg := ops.Msg{Topics: topics}
-	count := 512
+	count := uint64(16)
+	pubs := make([]*Publisher, 0, count)
 	delay := time.Duration(5) * time.Millisecond
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -29,9 +30,14 @@ func TestPublisher(t *testing.T) {
 		t.Fatalf("Failed to start Hub : %s\n", err.Error())
 	}
 
-	pub, err := New(ctx, proto, addr)
-	if err != nil {
-		t.Fatalf("Failed to start publisher : %s\n", err.Error())
+	var i uint64
+	for ; i < count; i++ {
+		pub, err := New(ctx, proto, addr)
+		if err != nil {
+			t.Fatalf("Failed to start publisher %d : %s\n", i+1, err.Error())
+		}
+
+		pubs = append(pubs, pub)
 	}
 
 	sub, err := subscriber.New(ctx, proto, addr, capacity, topics...)
@@ -39,7 +45,7 @@ func TestPublisher(t *testing.T) {
 		t.Fatalf("Failed to start subscriber : %s\n", err.Error())
 	}
 
-	for i := 0; i < count; i++ {
+	for i, pub := range pubs {
 		msg.Data = []byte(fmt.Sprintf("%d", i+1))
 		if n := pub.Publish(&msg); n != 2 {
 			t.Fatalf("Expected to publish to 2 subscribers, did to %d\n", n)
@@ -48,7 +54,8 @@ func TestPublisher(t *testing.T) {
 
 	<-time.After(delay)
 
-	for i := 0; i < count; i++ {
+	i = 0
+	for ; i < count; i++ {
 		data := []byte(fmt.Sprintf("%d", i+1))
 
 		{
@@ -60,7 +67,7 @@ func TestPublisher(t *testing.T) {
 				t.Fatalf("Expected message from `%s`, got from `%s`\n", topic_1, conMsg.Topic)
 			}
 			if !bytes.Equal(conMsg.Data, data) {
-				t.Fatalf("Expected message `%s`, got `%s`\n", data, conMsg.Topic)
+				t.Fatalf("Expected message `%s`, got `%s`\n", data, conMsg.Data)
 			}
 		}
 
@@ -73,7 +80,7 @@ func TestPublisher(t *testing.T) {
 				t.Fatalf("Expected message from `%s`, got from `%s`\n", topic_2, conMsg.Topic)
 			}
 			if !bytes.Equal(conMsg.Data, data) {
-				t.Fatalf("Expected message `%s`, got `%s`\n", data, conMsg.Topic)
+				t.Fatalf("Expected message `%s`, got `%s`\n", data, conMsg.Data)
 			}
 		}
 	}
