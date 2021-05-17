@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net"
 	"sync"
@@ -20,6 +21,30 @@ type Hub struct {
 	queueLock    *sync.RWMutex
 	pendingQueue []*ops.Msg
 	ping         chan struct{}
+}
+
+// New - Creates a new instance of hub, ready to be used
+func New(ctx context.Context, addr string, cap uint64) (*Hub, error) {
+	hub := Hub{
+		index:        1,
+		subLock:      &sync.RWMutex{},
+		subscribers:  make(map[string]map[uint64]net.Conn),
+		queueLock:    &sync.RWMutex{},
+		pendingQueue: make([]*ops.Msg, cap),
+		ping:         make(chan struct{}, cap),
+	}
+
+	done := make(chan bool)
+	go hub.Listen(ctx, addr, done)
+	if !<-done {
+		return nil, errors.New("failed to start listener")
+	}
+
+	running := make(chan struct{})
+	go hub.Process(ctx, running)
+	<-running
+
+	return &hub, nil
 }
 
 // publish - Actually writes message, along with opcode
