@@ -30,7 +30,7 @@ func New(ctx context.Context, addr string, cap uint64) (*Hub, error) {
 		subLock:      &sync.RWMutex{},
 		subscribers:  make(map[string]map[uint64]net.Conn),
 		queueLock:    &sync.RWMutex{},
-		pendingQueue: make([]*ops.Msg, cap),
+		pendingQueue: make([]*ops.Msg, 0, cap),
 		ping:         make(chan struct{}, cap),
 	}
 
