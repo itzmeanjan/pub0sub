@@ -15,22 +15,28 @@ import (
 // Hub - Abstraction between message publishers & subscribers,
 // works as a multiplexer ( or router )
 type Hub struct {
-	index        uint64
-	subLock      *sync.RWMutex
-	subscribers  map[string]map[uint64]net.Conn
-	queueLock    *sync.RWMutex
-	pendingQueue []*ops.Msg
-	ping         chan struct{}
+	index          uint64
+	subLock        *sync.RWMutex
+	subscribers    map[string]map[uint64]net.Conn
+	revLock        *sync.RWMutex
+	revSubscribers map[uint64]map[string]bool
+	queueLock      *sync.RWMutex
+	pendingQueue   []*ops.Msg
+	ping           chan struct{}
+	evict          chan uint64
 }
 
 // New - Creates a new instance of hub, ready to be used
 func New(ctx context.Context, addr string, cap uint64) (*Hub, error) {
 	hub := Hub{
-		subLock:      &sync.RWMutex{},
-		subscribers:  make(map[string]map[uint64]net.Conn),
-		queueLock:    &sync.RWMutex{},
-		pendingQueue: make([]*ops.Msg, 0, cap),
-		ping:         make(chan struct{}, cap),
+		subLock:        &sync.RWMutex{},
+		subscribers:    make(map[string]map[uint64]net.Conn),
+		revLock:        &sync.RWMutex{},
+		revSubscribers: make(map[uint64]map[string]bool),
+		queueLock:      &sync.RWMutex{},
+		pendingQueue:   make([]*ops.Msg, 0, cap),
+		ping:           make(chan struct{}, cap),
+		evict:          make(chan uint64, cap),
 	}
 
 	done := make(chan bool)
@@ -76,6 +82,7 @@ func (h *Hub) publish(op *ops.OP, msg *ops.Msg) {
 func (h *Hub) Process(ctx context.Context, running chan struct{}) {
 	close(running)
 
+	op := ops.MSG_PUSH
 	for {
 		select {
 		case <-ctx.Done():
@@ -83,12 +90,10 @@ func (h *Hub) Process(ctx context.Context, running chan struct{}) {
 
 		case <-h.ping:
 			msg := h.Next()
-			op := ops.MSG_PUSH
 			h.publish(&op, msg)
 
 		case <-time.After(time.Duration(100) * time.Millisecond):
 			started := time.Now()
-			op := ops.MSG_PUSH
 
 			for msg := h.Next(); msg != nil; {
 				if time.Since(started) > time.Duration(100)*time.Millisecond {
@@ -130,7 +135,7 @@ func (h *Hub) Listen(ctx context.Context, addr string, done chan bool) {
 			conn, err := lis.Accept()
 			if err != nil {
 				log.Printf("[pub0sub] Error : %s\n", err.Error())
-				break
+				return
 			}
 
 			func(conn net.Conn) {
@@ -144,9 +149,16 @@ func (h *Hub) Listen(ctx context.Context, addr string, done chan bool) {
 // handleTCPConnection - Each publisher, subscriber connection is handled
 // in this method, as seperate go routine
 func (h *Hub) handleTCPConnection(ctx context.Context, conn net.Conn) {
+	var subscriberId uint64
 	defer func() {
 		if err := conn.Close(); err != nil {
 			log.Printf("[pub0sub] Error : %s\n", err.Error())
+		}
+
+		// If peer is indeed one subscriber,
+		// mark it can be evicted
+		if subscriberId != 0 {
+			h.evict <- subscriberId
 		}
 	}()
 
@@ -188,6 +200,11 @@ STOP:
 				}
 
 				subId, topicCount := h.Subscribe(conn, msg.Topics...)
+				{
+					// keep track of subscriber id,
+					// if peer is indeed subscriber
+					subscriberId = subId
+				}
 				rOp := ops.NEW_SUB_RESP
 				if _, err := rOp.WriteTo(conn); err != nil {
 					break STOP
@@ -274,6 +291,39 @@ func (h *Hub) Next() *ops.Msg {
 	return msg
 }
 
+// keepRevSubs - Populate map where we can keep track of which subscriber
+// is subscriber to which topics, so that they can be evicted easily, when needed
+func (h *Hub) keepRevSubs(subId uint64, topic string) {
+	h.revLock.Lock()
+	defer h.revLock.Unlock()
+
+	revSubs, ok := h.revSubscribers[subId]
+	if !ok {
+		revSubs := make(map[string]bool)
+		revSubs[topic] = true
+		h.revSubscribers[subId] = revSubs
+		return
+	}
+
+	revSubs[topic] = true
+}
+
+// removeRevSubs - If not required, remove entry from map
+func (h *Hub) removeRevSubs(subId uint64, topic string) {
+	h.revLock.Lock()
+	defer h.revLock.Unlock()
+
+	revSubs, ok := h.revSubscribers[subId]
+	if !ok {
+		return
+	}
+
+	delete(revSubs, topic)
+	if len(revSubs) == 0 {
+		delete(h.revSubscribers, subId)
+	}
+}
+
 // topicSubscribe - Subscribe client to topics
 func (h *Hub) topicSubscribe(subId uint64, conn net.Conn, topics ...string) uint32 {
 	var count uint32
@@ -289,6 +339,7 @@ func (h *Hub) topicSubscribe(subId uint64, conn net.Conn, topics ...string) uint
 			h.subscribers[topics[i]] = subs
 
 			count++
+			h.keepRevSubs(subId, topics[i])
 			continue
 		}
 
@@ -298,6 +349,7 @@ func (h *Hub) topicSubscribe(subId uint64, conn net.Conn, topics ...string) uint
 
 		subs[subId] = conn
 		count++
+		h.keepRevSubs(subId, topics[i])
 	}
 
 	return count
@@ -345,6 +397,7 @@ func (h *Hub) Unsubscribe(subId uint64, topics ...string) uint32 {
 		if _, ok := subs[subId]; ok {
 			delete(subs, subId)
 			count++
+			h.removeRevSubs(subId, topics[i])
 
 			if len(subs) == 0 {
 				delete(h.subscribers, topics[i])
