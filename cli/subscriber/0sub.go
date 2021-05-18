@@ -58,7 +58,13 @@ func main() {
 		for {
 			select {
 			case <-ctx.Done():
-				log.Printf("[0sub] Stopping listener\n")
+				n, err := sub.UnsubscribeAll()
+				if err != nil {
+					log.Printf("[0sub] Failed to clean subscriptions : %s\n", err.Error())
+					return
+				}
+
+				log.Printf("[0sub] Cleaned %d topic subscriptions\n", n)
 				return
 
 			case <-sub.Watch():
