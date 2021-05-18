@@ -5,7 +5,10 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/itzmeanjan/pub0sub/ops"
@@ -33,6 +36,7 @@ func main() {
 		addr   = flag.String("addr", "127.0.0.1", "Connect to address")
 		port   = flag.Uint64("port", 13000, "Connect to port")
 		data   = flag.String("data", "hello", "Data to publish")
+		repeat = flag.Uint64("repeat", 1, "Repeat publish ( = 0 :-> infinite )")
 		topics topicList
 	)
 	flag.Var(&topics, "topic", "Topic to publish data on")
@@ -53,7 +57,28 @@ func main() {
 
 	log.Printf("[0pub] Connected to %s\n", fullAddr)
 	msg := ops.Msg{Topics: topics, Data: []byte(*data)}
-	log.Printf("[0pub] Approximate message reach %d\n", pub.Publish(&msg))
+	if *repeat == 0 {
+		interruptChan := make(chan os.Signal, 1)
+		signal.Notify(interruptChan, syscall.SIGTERM, syscall.SIGINT)
+
+		var i uint64
+	OUT:
+		for ; ; i++ {
+			select {
+			case <-interruptChan:
+				break OUT
+
+			default:
+				log.Printf("[0pub] (%d/ ∞) Approximate message reach %d\n", i+1, pub.Publish(&msg))
+
+			}
+		}
+	} else {
+		var i uint64
+		for ; i < *repeat; i++ {
+			log.Printf("[0pub] (%d/ %d) Approximate message reach %d\n", i+1, *repeat, pub.Publish(&msg))
+		}
+	}
 
 	cancel()
 	<-time.After(time.Second)
