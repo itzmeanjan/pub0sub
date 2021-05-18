@@ -40,11 +40,17 @@ go get -u github.com/itzmeanjan/pub0sub
 
 - [Hub](#hub)
 - [Publisher](#publisher)
-- Subscriber
+- [Subscriber](#subscriber)
 
 ### Hub
 
 You probably would like to use `0hub` for this purpose.
+
+---
+Default Port | Default Interface
+--- | ---
+13000 | 127.0.0.1
+---
 
 Build using 
 
@@ -59,7 +65,7 @@ Run using
 ./0hub # run
 ```
 
-> You can build & run with `make hub`
+> Single step build-and-run with `make hub`
 
 > If interested, you can check `0hub` implementation [here](./cli/hub/0hub.go)
 
@@ -127,6 +133,123 @@ cancel()
 ```go
 if pub.Connected() {
     log.Println("Yes, still connected")
+}
+```
+
+### Subscriber
+
+You're encouraged to first test out `0sub` - minimalistic CLI subscriber client for interacting with Hub.
+
+Build using
+
+```bash
+make build_sub
+```
+
+Run using
+
+```bash
+./0sub -help
+./0sub # run
+```
+
+Take a look at implementation [here](./cli/subscriber/0sub.go)
+
+> Single step build-and-run using `make sub`, runs with default config
+
+But probably you want to programmatically interact with Hub for subscribing to topics of interest & receive messages as soon as they're published
+
+
+- Start by creating subscriber instance, which will establish a long-lived TCP connection with Hub & subscribe initially to topics provided with
+
+```go
+ctx, cancel := context.WithCancel(context.Background())
+
+capacity := 128 // pending message inbox capacity
+topics := []string{"topic_1", "topic_2"}
+
+sub, err := subscriber.New(ctx, "tcp", "127.0.0.1:13000", capacity, topics...)
+if err != nil {
+	return
+}
+```
+
+- As soon as new message is available for consumption **( queued in inbox )**, subscriber process to be notified over go channel. It's better to listen & pull message from inbox
+
+```go
+for {
+	select {
+		case <-ctx.Done():
+			return
+
+        // watch to get notified
+		case <-sub.Watch():
+			if msg := sub.Next(); msg != nil {
+                // consume message
+			}
+	}
+}
+```
+
+- You can add more on-the-fly topic subscriptions
+
+```go
+n, err := sub.AddSubscription("topic_3")
+if err != nil {
+    return
+}
+
+log.Printf("Subscribed to %d topic(s)\n", n)
+```
+
+- You might need to unsubscribe from topics
+
+```go
+n, err := sub.Unsubscribe("topic_1")
+if err != nil {
+    return
+}
+
+log.Printf("Unsubscribed from %d topic(s)\n", n)
+```
+
+- You can unsubscribe from all topics
+
+```go
+n, err := sub.UnsubscribeAll()
+if err != nil {
+    return
+}
+
+log.Printf("Unsubscribed from %d topic(s)\n", n)
+```
+
+- Any time you can check existence of unconsumed bufferred messages in inbox
+
+```go
+if sub.Queued() {
+    log.Println("We've messages to consume")
+
+    if msg := sub.Next(); msg != nil {
+        // act on message
+    }
+}
+```
+
+- Or you may need to check whether client is still connected to Hub over TCP
+
+```go
+if sub.Connected() {
+    log.Println("Yes, still connected")
+}
+```
+
+- When done using, it's better to gracefully tear down TCP connection
+
+```go
+if err := sub.Disconnect(); err != nil {
+    // may happen when already teared down
+    log.Println(err.Error())
 }
 ```
 
