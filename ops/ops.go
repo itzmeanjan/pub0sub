@@ -22,7 +22,9 @@ const (
 )
 
 var (
-	TerminateConnection = errors.New("unsupported opcode, begin connection tear down")
+	ErrTerminateConnection  = errors.New("unsupported opcode, begin connection tear down")
+	ErrConnectionTerminated = errors.New("connection already teared down")
+	ErrEmptyTopicSet        = errors.New("topic list is empty")
 )
 
 // WriteTo - Writes operation type to stream, so that

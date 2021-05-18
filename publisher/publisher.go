@@ -2,8 +2,10 @@ package publisher
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net"
+	"sync/atomic"
 	"time"
 
 	"github.com/itzmeanjan/pub0sub/ops"
@@ -11,8 +13,9 @@ import (
 
 // Publisher - Abstraction layer at which publisher operates
 type Publisher struct {
-	conn    net.Conn
-	msgChan chan *msgPublishRequest
+	connected uint64
+	conn      net.Conn
+	msgChan   chan *msgPublishRequest
 }
 
 // msgPublishRequest - Message publish request to be received
@@ -25,8 +28,11 @@ type msgPublishRequest struct {
 // start - Lifecycle manager of publisher, accepts publish request
 // acts on it & responds back
 func (p *Publisher) start(ctx context.Context, running chan struct{}) {
+	atomic.AddUint64(&p.connected, 1)
 	close(running)
+
 	defer func() {
+		atomic.AddUint64(&p.connected, ^uint64(0))
 		if err := p.conn.Close(); err != nil {
 			log.Printf("[pub0sub] Error : %s\n", err.Error())
 		}
@@ -42,7 +48,7 @@ func (p *Publisher) start(ctx context.Context, running chan struct{}) {
 			if err != nil {
 				// something wrong detected, connection to be
 				// teared down
-				if err == ops.TerminateConnection {
+				if errors.Is(err, ops.ErrTerminateConnection) {
 					req.resChan <- 0
 					return
 				}
@@ -81,7 +87,7 @@ func (p *Publisher) send(msg *ops.Msg) (uint64, error) {
 
 	// check whether supported or not
 	if *rOp != ops.PUB_RESP {
-		return 0, ops.TerminateConnection
+		return 0, ops.ErrTerminateConnection
 	}
 
 	// attempt to read response
@@ -117,9 +123,18 @@ func New(ctx context.Context, proto, addr string) (*Publisher, error) {
 
 // Publish - Sends message publish request over network,
 // returns back how many of subscribers received this message
-func (p *Publisher) Publish(msg *ops.Msg) uint64 {
+func (p *Publisher) Publish(msg *ops.Msg) (uint64, error) {
+	if !p.Connected() {
+		return 0, ops.ErrConnectionTerminated
+	}
+
 	resChan := make(chan uint64, 1)
 	p.msgChan <- &msgPublishRequest{msg: msg, resChan: resChan}
 
-	return <-resChan
+	return <-resChan, nil
+}
+
+// Connected - Concurrent safe check for connection aliveness with HUB
+func (p *Publisher) Connected() bool {
+	return atomic.LoadUint64(&p.connected) == 1
 }
