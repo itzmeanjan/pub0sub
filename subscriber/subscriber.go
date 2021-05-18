@@ -2,7 +2,6 @@ package subscriber
 
 import (
 	"context"
-	"errors"
 	"log"
 	"net"
 	"sync"
@@ -37,7 +36,7 @@ type newSubscriptionResponse struct {
 // with HUB
 func New(ctx context.Context, proto, addr string, cap uint64, topics ...string) (*Subscriber, error) {
 	if len(topics) == 0 {
-		return nil, errors.New("non-empty topic set required")
+		return nil, ops.ErrEmptyTopicSet
 	}
 
 	d := net.Dialer{
@@ -93,6 +92,10 @@ func (s *Subscriber) listen(ctx context.Context, running chan struct{}) {
 	close(running)
 
 	defer func() {
+		if !s.Connected() {
+			return
+		}
+
 		atomic.AddUint64(&s.connected, ^uint64(0))
 		if err := s.conn.Close(); err != nil {
 			log.Printf("[pub0sub] Error : %s\n", err.Error())
@@ -256,7 +259,7 @@ func (s *Subscriber) UnsubscribeAll() (uint32, error) {
 
 	s.topicLock.Lock()
 	if len(s.topics) == 0 {
-		return 0, errors.New("no topics to unsubscribe from")
+		return 0, ops.ErrEmptyTopicSet
 	}
 	topics := make([]string, 0, len(s.topics))
 	var unsubCount uint64
@@ -320,4 +323,16 @@ func (s *Subscriber) Next() *ops.PushedMessage {
 // Connected - Concurrent safe check for connection aliveness with HUB
 func (s *Subscriber) Connected() bool {
 	return atomic.LoadUint64(&s.connected) == 1
+}
+
+// Disconnect - Disconnects subscriber by closing network connection
+//
+// Invoking this method also unblocks read attempt in `listen`-er go routine
+func (s *Subscriber) Disconnect() error {
+	if !s.Connected() {
+		return ops.ErrConnectionTerminated
+	}
+
+	atomic.AddUint64(&s.connected, ^uint64(0))
+	return s.conn.Close()
 }

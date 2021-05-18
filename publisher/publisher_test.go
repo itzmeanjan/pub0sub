@@ -47,7 +47,11 @@ func TestPublisher(t *testing.T) {
 
 	for i, pub := range pubs {
 		msg.Data = []byte(fmt.Sprintf("%d", i+1))
-		if n := pub.Publish(&msg); n != 2 {
+		n, err := pub.Publish(&msg)
+		if err != nil {
+			t.Fatalf("Failed to publish : %s\n", err.Error())
+		}
+		if n != 2 {
 			t.Fatalf("Expected to publish to 2 subscribers, did to %d\n", n)
 		}
 	}
@@ -87,4 +91,10 @@ func TestPublisher(t *testing.T) {
 
 	cancel()
 	<-time.After(delay)
+
+	for _, pub := range pubs {
+		if pub.Connected() {
+			t.Fatalf("Expected to see publisher disconnected\n")
+		}
+	}
 }

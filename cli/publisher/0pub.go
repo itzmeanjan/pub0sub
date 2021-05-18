@@ -69,14 +69,26 @@ func main() {
 				break OUT
 
 			default:
-				log.Printf("[0pub] (%d/ ∞) Approximate message reach %d\n", i+1, pub.Publish(&msg))
+				n, err := pub.Publish(&msg)
+				if err != nil {
+					log.Printf("[0pub] Error : %s\n", err.Error())
+					break OUT
+				}
+				log.Printf("[0pub] (%d/ ∞) Approximate message reach %d\n", i+1, n)
 
 			}
 		}
 	} else {
 		var i uint64
 		for ; i < *repeat; i++ {
-			log.Printf("[0pub] (%d/ %d) Approximate message reach %d\n", i+1, *repeat, pub.Publish(&msg))
+
+			n, err := pub.Publish(&msg)
+			if err != nil {
+				log.Printf("[0pub] Error : %s\n", err.Error())
+				break
+			}
+			log.Printf("[0pub] (%d/ %d) Approximate message reach %d\n", i+1, *repeat, n)
+
 		}
 	}
 

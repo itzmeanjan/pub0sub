@@ -37,7 +37,11 @@ func TestHub(t *testing.T) {
 		t.Fatalf("Failed to start subscriber : %s\n", err.Error())
 	}
 
-	if n := pub.Publish(&msg); n != 1 {
+	n, err := pub.Publish(&msg)
+	if err != nil {
+		t.Fatalf("Failed to publish : %s\n", err.Error())
+	}
+	if n != 1 {
 		t.Fatalf("Expected to publish to 1 subscriber, did to %d\n", n)
 	}
 
@@ -55,4 +59,14 @@ func TestHub(t *testing.T) {
 
 	cancel()
 	<-time.After(delay)
+	if err := sub.Disconnect(); err != nil {
+		t.Logf("Failed to disconnect subscriber : %s\n", err.Error())
+	}
+
+	if pub.Connected() {
+		t.Fatalf("Expected to see publisher disconnected\n")
+	}
+	if sub.Connected() {
+		t.Fatalf("Expected to see subscriber disconnected\n")
+	}
 }

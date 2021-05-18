@@ -46,7 +46,11 @@ func TestSubscriber(t *testing.T) {
 		subs = append(subs, sub)
 	}
 
-	if n := pub.Publish(&msg); n != 2*count {
+	n, err := pub.Publish(&msg)
+	if err != nil {
+		t.Fatalf("Failed to publish : %s\n", err.Error())
+	}
+	if n != 2*count {
 		t.Fatalf("Expected to publish to %d subscribers, did to %d\n", 2*count, n)
 	}
 
@@ -91,7 +95,11 @@ func TestSubscriber(t *testing.T) {
 	}
 
 	msg.Topics = append(msg.Topics, topic_3)
-	if n := pub.Publish(&msg); n != 3*count {
+	n, err = pub.Publish(&msg)
+	if err != nil {
+		t.Fatalf("Failed to publish : %s\n", err.Error())
+	}
+	if n != 3*count {
 		t.Fatalf("Expected to publish to %d subscribers, did to %d\n", 3*count, n)
 	}
 
@@ -158,7 +166,11 @@ func TestSubscriber(t *testing.T) {
 		}
 	}
 
-	if n := pub.Publish(&msg); n != 0 {
+	n, err = pub.Publish(&msg)
+	if err != nil {
+		t.Fatalf("Failed to publish : %s\n", err.Error())
+	}
+	if n != 0 {
 		t.Fatalf("Expected to publish to 0 subscribers, did to %d\n", n)
 	}
 
@@ -183,4 +195,16 @@ func TestSubscriber(t *testing.T) {
 
 	cancel()
 	<-time.After(delay)
+
+	for _, sub := range subs {
+		if err := sub.Disconnect(); err != nil {
+			t.Logf("Failed to disconnect subscriber : %s\n", err.Error())
+		}
+	}
+
+	for _, sub := range subs {
+		if sub.Connected() {
+			t.Fatalf("Expected to see subscriber disconnected\n")
+		}
+	}
 }
