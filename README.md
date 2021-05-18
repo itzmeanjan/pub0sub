@@ -178,15 +178,15 @@ if err != nil {
 
 ```go
 for {
-	select {
-		case <-ctx.Done():
-			return
-
+    select {
+        case <-ctx.Done():
+            return
+        
         // watch to get notified
-		case <-sub.Watch():
-			if msg := sub.Next(); msg != nil {
+        case <-sub.Watch():
+            if msg := sub.Next(); msg != nil {
                 // consume message
-			}
+            }
 	}
 }
 ```
