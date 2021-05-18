@@ -45,9 +45,15 @@ func New(ctx context.Context, addr string, cap uint64) (*Hub, error) {
 		return nil, errors.New("failed to start listener")
 	}
 
-	running := make(chan struct{})
-	go hub.Process(ctx, running)
-	<-running
+	var (
+		runProc  = make(chan struct{})
+		runEvict = make(chan struct{})
+	)
+
+	go hub.Process(ctx, runProc)
+	go hub.Evict(ctx, runEvict)
+	<-runProc
+	<-runEvict
 
 	return &hub, nil
 }
