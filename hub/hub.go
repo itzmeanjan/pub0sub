@@ -146,6 +146,40 @@ func (h *Hub) Listen(ctx context.Context, addr string, done chan bool) {
 	}
 }
 
+// Evict - As soon as it's determined peer is not anymore
+// connected & it didn't follow graceful tear down ( didn't unsubscribe from topics )
+// its entry from subscription table to be evicted
+func (h *Hub) Evict(ctx context.Context, running chan struct{}) {
+	close(running)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+
+		case id := <-h.evict:
+			h.revLock.Lock()
+			revSubs, ok := h.revSubscribers[id]
+			if ok {
+				for topic := range revSubs {
+					h.subLock.Lock()
+					subs, ok := h.subscribers[topic]
+					if ok {
+						delete(subs, id)
+						if len(subs) == 0 {
+							delete(h.subscribers, topic)
+						}
+					}
+					h.subLock.Unlock()
+				}
+
+				delete(h.revSubscribers, id)
+			}
+			h.revLock.Unlock()
+		}
+	}
+}
+
 // handleTCPConnection - Each publisher, subscriber connection is handled
 // in this method, as seperate go routine
 func (h *Hub) handleTCPConnection(ctx context.Context, conn net.Conn) {
