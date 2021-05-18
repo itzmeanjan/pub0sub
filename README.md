@@ -20,8 +20,114 @@ What it gives us is, ability to publish messages to topics over network, where *
 
 > QUIC to be preferred choice of network I/O, due to benefits it brings on table.
 
+> ⭐️ Primary implementation is on top of TCP.
+
 ## Architecture
 
 ![architecture](./sc/architecture.jpg)
+
+## Install
+
+Add `pub0sub` into your project _( **GOMOD** enabled )_
+
+```bash
+go get -u github.com/itzmeanjan/pub0sub
+```
+
+## Usage
+
+`pub0sub` has three components
+
+- [Hub](#hub)
+- [Publisher](#publisher)
+- Subscriber
+
+### Hub
+
+You probably would like to use `0hub` for this purpose.
+
+Build using 
+
+```bash
+make build_hub
+```
+
+Run using
+
+```bash
+./0hub -help
+./0hub # run
+```
+
+> You can build & run with `make hub`
+
+> If interested, you can check `0hub` implementation [here](./cli/hub/0hub.go)
+
+### Publisher
+
+You can interact with Hub, using minimalistic publisher CLI client `0pub`. Implementation can be found [here](./cli/publisher/0pub.go)
+
+Build using
+
+```bash
+make build_pub
+```
+
+Run using
+
+```bash
+./0pub -help
+./0pub # run
+```
+
+> Single step build-and-run with `make pub`, using defaults
+
+You're probably interested in publishing messages programmatically. 
+
+- Let's first create a publisher, which will establish TCP connection with Hub
+
+```go
+ctx, cancel := context.WithCancel(context.Background())
+
+pub, err := publisher.New(ctx, "tcp", "127.0.0.1:13000")
+if err != nil {
+	return
+}
+```
+
+- Construct message you want to publish
+
+```go
+data := []byte("hello")
+topics := []string{"topic_1", "topic_2"}
+
+msg := ops.Msg{Topics: topics, Data: data}
+```
+
+- Publish message
+
+```go
+n, err := pub.Publish(&msg)
+if err != nil {
+	return
+}
+
+log.Printf("Approximate %d receiver(s)\n", n)
+```
+
+- When done using publisher instance, cancel context, which will tear down network connection gracefully
+
+```go
+cancel()
+<-time.After(time.Second) // just wait a second
+```
+
+- You can always check whether network connection with Hub in unaffected or not
+
+```go
+if pub.Connected() {
+    log.Println("Yes, still connected")
+}
+```
 
 **More coming soon**
