@@ -21,7 +21,11 @@ const (
 	UNSUB_RESP
 )
 
-var ErrTerminateConnection = errors.New("unsupported opcode, begin connection tear down")
+var (
+	ErrTerminateConnection  = errors.New("unsupported opcode, begin connection tear down")
+	ErrConnectionTerminated = errors.New("connection already teared down")
+	ErrEmptyTopicSet        = errors.New("topic list is empty")
+)
 
 // WriteTo - Writes operation type to stream, so that
 // receiving party can understand intention of message

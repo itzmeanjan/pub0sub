@@ -26,7 +26,6 @@ type Hub struct {
 // New - Creates a new instance of hub, ready to be used
 func New(ctx context.Context, addr string, cap uint64) (*Hub, error) {
 	hub := Hub{
-		index:        1,
 		subLock:      &sync.RWMutex{},
 		subscribers:  make(map[string]map[uint64]net.Conn),
 		queueLock:    &sync.RWMutex{},
@@ -245,10 +244,7 @@ STOP:
 
 // nextId - Generates next subscriber id [ concurrrent-safe ]
 func (h *Hub) nextId() uint64 {
-	id := atomic.LoadUint64(&h.index)
-	atomic.AddUint64(&h.index, 1)
-
-	return id
+	return atomic.AddUint64(&h.index, 1)
 }
 
 // queued - Manager to check whether it has anything to act on

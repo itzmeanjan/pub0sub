@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/itzmeanjan/pub0sub/ops"
@@ -14,6 +15,7 @@ import (
 // Subscriber - Abstraction layer at which subscriber interacts, while
 // all underlying networking details are kept hidden
 type Subscriber struct {
+	connected    uint64
 	id           uint64
 	conn         net.Conn
 	topicLock    *sync.RWMutex
@@ -87,8 +89,11 @@ func New(ctx context.Context, proto, addr string, cap uint64, topics ...string) 
 // listen - Keeps waiting for new message arrival from HUB & buffers them
 // so that subscriber can pull it from queue
 func (s *Subscriber) listen(ctx context.Context, running chan struct{}) {
+	atomic.AddUint64(&s.connected, 1)
 	close(running)
+
 	defer func() {
+		atomic.AddUint64(&s.connected, ^uint64(0))
 		if err := s.conn.Close(); err != nil {
 			log.Printf("[pub0sub] Error : %s\n", err.Error())
 		}
@@ -176,7 +181,11 @@ func (s *Subscriber) listen(ctx context.Context, running chan struct{}) {
 // more topics can be subscribed to
 func (s *Subscriber) AddSubscription(topics ...string) (uint32, error) {
 	if len(topics) == 0 {
-		return 0, errors.New("non-empty topic set required")
+		return 0, ops.ErrEmptyTopicSet
+	}
+
+	if !s.Connected() {
+		return 0, ops.ErrConnectionTerminated
 	}
 
 	s.topicLock.Lock()
@@ -207,7 +216,11 @@ func (s *Subscriber) AddSubscription(topics ...string) (uint32, error) {
 // message to be received from those anymore
 func (s *Subscriber) Unsubscribe(topics ...string) (uint32, error) {
 	if len(topics) == 0 {
-		return 0, errors.New("non-empty topic set required")
+		return 0, ops.ErrEmptyTopicSet
+	}
+
+	if !s.Connected() {
+		return 0, ops.ErrConnectionTerminated
 	}
 
 	s.topicLock.Lock()
@@ -237,6 +250,10 @@ func (s *Subscriber) Unsubscribe(topics ...string) (uint32, error) {
 // UnsubscribeAll - Client not interested in receiving any messages
 // from any of currently subscribed topics
 func (s *Subscriber) UnsubscribeAll() (uint32, error) {
+	if !s.Connected() {
+		return 0, ops.ErrConnectionTerminated
+	}
+
 	s.topicLock.Lock()
 	if len(s.topics) == 0 {
 		return 0, errors.New("no topics to unsubscribe from")
@@ -298,4 +315,9 @@ func (s *Subscriber) Next() *ops.PushedMessage {
 	s.buffer = s.buffer[:len-1]
 
 	return msg
+}
+
+// Connected - Concurrent safe check for connection aliveness with HUB
+func (s *Subscriber) Connected() bool {
+	return atomic.LoadUint64(&s.connected) == 1
 }
