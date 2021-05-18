@@ -57,11 +57,12 @@ func TestHub(t *testing.T) {
 		t.Errorf("Expected message `%s`, got `%s`\n", data, conMsg.Topic)
 	}
 
-	cancel()
-	<-time.After(delay)
 	if err := sub.Disconnect(); err != nil {
 		t.Logf("Failed to disconnect subscriber : %s\n", err.Error())
 	}
+
+	cancel()
+	<-time.After(delay)
 
 	if pub.Connected() {
 		t.Fatalf("Expected to see publisher disconnected\n")

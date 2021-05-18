@@ -89,6 +89,10 @@ func TestPublisher(t *testing.T) {
 		}
 	}
 
+	if err := sub.Disconnect(); err != nil {
+		t.Logf("Failed to disconnect subscriber : %s\n", err.Error())
+	}
+
 	cancel()
 	<-time.After(delay)
 

@@ -193,14 +193,14 @@ func TestSubscriber(t *testing.T) {
 		}
 	}
 
-	cancel()
-	<-time.After(delay)
-
 	for _, sub := range subs {
 		if err := sub.Disconnect(); err != nil {
 			t.Logf("Failed to disconnect subscriber : %s\n", err.Error())
 		}
 	}
+
+	cancel()
+	<-time.After(delay)
 
 	for _, sub := range subs {
 		if sub.Connected() {

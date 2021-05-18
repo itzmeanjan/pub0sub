@@ -2,7 +2,6 @@ package subscriber
 
 import (
 	"context"
-	"errors"
 	"log"
 	"net"
 	"sync"
@@ -106,7 +105,6 @@ func (s *Subscriber) listen(ctx context.Context, running chan struct{}) {
 	for {
 		select {
 		case <-ctx.Done():
-			s.UnsubscribeAll()
 			return
 
 		default:
@@ -332,10 +330,6 @@ func (s *Subscriber) Connected() bool {
 // Invoking this method also unblocks read attempt in `listen`-er go routine
 // if that's blocked
 func (s *Subscriber) Disconnect() error {
-	if _, err := s.UnsubscribeAll(); errors.Is(err, ops.ErrConnectionTerminated) {
-		return ops.ErrConnectionTerminated
-	}
-
 	if !s.Connected() {
 		return ops.ErrConnectionTerminated
 	}
