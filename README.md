@@ -26,6 +26,8 @@ What it gives us is, ability to publish messages to topics over network, where *
 
 ![architecture](./sc/architecture.jpg)
 
+![async-io-model](./sc/async-io.jpg)
+
 ## Install
 
 Add `pub0sub` into your project _( **GOMOD** enabled )_
