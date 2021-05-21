@@ -1,7 +1,9 @@
 package hub
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"log"
 	"net"
@@ -16,16 +18,18 @@ import (
 // Hub - Abstraction between message publishers & subscribers,
 // works as a multiplexer ( or router )
 type Hub struct {
-	watcher        *gaio.Watcher
-	index          uint64
-	subLock        *sync.RWMutex
-	subscribers    map[string]map[uint64]net.Conn
-	revLock        *sync.RWMutex
-	revSubscribers map[uint64]map[string]bool
-	queueLock      *sync.RWMutex
-	pendingQueue   []*ops.Msg
-	ping           chan struct{}
-	evict          chan uint64
+	watcher               *gaio.Watcher
+	pendingPublishersLock *sync.RWMutex
+	pendingPublishers     map[net.Conn]bool
+	index                 uint64
+	subLock               *sync.RWMutex
+	subscribers           map[string]map[uint64]net.Conn
+	revLock               *sync.RWMutex
+	revSubscribers        map[uint64]map[string]bool
+	queueLock             *sync.RWMutex
+	pendingQueue          []*ops.Msg
+	ping                  chan struct{}
+	evict                 chan uint64
 }
 
 // New - Creates a new instance of hub, ready to be used
@@ -103,14 +107,54 @@ func (h *Hub) watch(ctx context.Context, done chan struct{}) {
 			return
 
 		default:
-			_, err := h.watcher.WaitIO()
+			results, err := h.watcher.WaitIO()
 			if err != nil {
 				log.Printf("[pub0sub] Error : %s\n", err.Error())
 				return
 			}
 
+			for i := 0; i < len(results); i++ {
+
+				switch results[i].Operation {
+				case gaio.OpRead:
+					if err := h.handleRead(ctx, results[i]); err != nil {
+						log.Printf("[pub0sub] Error : %s\n", err.Error())
+					}
+
+				case gaio.OpWrite:
+				}
+
+			}
 		}
 	}
+}
+
+func (h *Hub) handleRead(ctx context.Context, result gaio.OpResult) error {
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if result.Size == 0 {
+		return errors.New("read zero bytes")
+	}
+
+	data := result.Buffer[:result.Size]
+	switch ops.OP(data[0]) {
+	case ops.PUB_REQ, ops.NEW_SUB_REQ, ops.ADD_SUB_REQ, ops.UNSUB_REQ:
+		payloadSize := bytes.NewBuffer(data[1:])
+
+		var size uint32
+		if err := binary.Read(payloadSize, binary.BigEndian, &size); err != nil {
+			return err
+		}
+
+		buf := make([]byte, size)
+		return h.watcher.Read(ctx, result.Conn, buf)
+
+	default:
+	}
+
+	return nil
 }
 
 // publish - Actually writes message, along with opcode
