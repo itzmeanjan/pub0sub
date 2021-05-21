@@ -10,24 +10,43 @@ import (
 // Publisher to send message in this form
 type Msg pubsub.Message
 
+// Total size of message to be written into bytes stream
+func (m *Msg) size() uint32 {
+	var size uint32
+	size += 5
+
+	for i := 0; i < len(m.Topics); i++ {
+		size += (1 + uint32(len(m.Topics[i])))
+	}
+
+	size += (4 + uint32(len(m.Data)))
+	return size
+}
+
 // WriteTo - Writes message to byte stream in recoverable form
 func (m *Msg) WriteTo(w io.Writer) (int64, error) {
 	var size int64
 
-	lTopics := len(m.Topics)
-	if err := binary.Write(w, binary.BigEndian, uint32(lTopics)); err != nil {
+	if err := binary.Write(w, binary.BigEndian, m.size()); err != nil {
 		return size, err
 	}
 
 	size += 4
 
+	lTopics := len(m.Topics)
+	if err := binary.Write(w, binary.BigEndian, uint8(lTopics)); err != nil {
+		return size, err
+	}
+
+	size += 1
+
 	for i := 0; i < lTopics; i++ {
 		lTopic := len(m.Topics[i])
-		if err := binary.Write(w, binary.BigEndian, uint32(lTopic)); err != nil {
+		if err := binary.Write(w, binary.BigEndian, uint8(lTopic)); err != nil {
 			return size, err
 		}
 
-		size += 4
+		size += 1
 
 		if n, err := w.Write([]byte(m.Topics[i])); n != lTopic {
 			return size, err
@@ -56,21 +75,28 @@ func (m *Msg) WriteTo(w io.Writer) (int64, error) {
 func (m *Msg) ReadFrom(r io.Reader) (int64, error) {
 	var size int64
 
-	var lTopics uint32
-	if err := binary.Read(r, binary.BigEndian, &lTopics); err != nil {
+	var totalMsgSize uint32
+	if err := binary.Read(r, binary.BigEndian, &totalMsgSize); err != nil {
 		return size, err
 	}
 
 	size += 4
+
+	var lTopics uint8
+	if err := binary.Read(r, binary.BigEndian, &lTopics); err != nil {
+		return size, err
+	}
+
+	size += 1
 	topics := make([]string, 0, lTopics)
 
 	for i := 0; i < int(lTopics); i++ {
-		var lTopic uint32
+		var lTopic uint8
 		if err := binary.Read(r, binary.BigEndian, &lTopic); err != nil {
 			return size, err
 		}
 
-		size += 4
+		size += 1
 
 		topic := make([]byte, lTopic)
 		if n, err := r.Read(topic); n != int(lTopic) {
