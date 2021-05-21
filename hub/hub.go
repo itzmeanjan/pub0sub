@@ -141,7 +141,7 @@ func (h *Hub) handleRead(ctx context.Context, result gaio.OpResult) error {
 	data := result.Buffer[:result.Size]
 	switch ops.OP(data[0]) {
 	case ops.PUB_REQ, ops.NEW_SUB_REQ, ops.ADD_SUB_REQ, ops.UNSUB_REQ:
-		payloadSize := bytes.NewBuffer(data[1:])
+		payloadSize := bytes.NewReader(data[1:])
 
 		var size uint32
 		if err := binary.Read(payloadSize, binary.BigEndian, &size); err != nil {
@@ -152,6 +152,32 @@ func (h *Hub) handleRead(ctx context.Context, result gaio.OpResult) error {
 		return h.watcher.Read(ctx, result.Conn, buf)
 
 	default:
+		h.pendingPublishersLock.RLock()
+		if _, ok := h.pendingPublishers[result.Conn]; ok {
+			payload := bytes.NewReader(data[:])
+
+			msg := new(ops.Msg)
+			if _, err := msg.ReadFrom(payload); err != nil {
+				return err
+			}
+
+			subCount := h.Publish(msg)
+			resp := new(bytes.Buffer)
+
+			rOp := ops.PUB_RESP
+			if _, err := rOp.WriteTo(resp); err != nil {
+				return err
+			}
+
+			pResp := ops.CountResponse(subCount)
+			if _, err := pResp.WriteTo(resp); err != nil {
+				return err
+			}
+
+			return h.watcher.Write(ctx, result.Conn, resp.Bytes())
+		}
+		h.pendingPublishersLock.RUnlock()
+
 	}
 
 	return nil
