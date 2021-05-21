@@ -28,6 +28,8 @@ What it gives us is, ability to publish messages to topics over network, where *
 
 ![async-io-model](./sc/async-io.jpg)
 
+![wire-format](./sc/wire-format.jpg)
+
 ## Install
 
 Add `pub0sub` into your project _( **GOMOD** enabled )_
