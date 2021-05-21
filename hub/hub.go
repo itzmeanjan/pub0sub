@@ -10,11 +10,13 @@ import (
 	"time"
 
 	"github.com/itzmeanjan/pub0sub/ops"
+	"github.com/xtaci/gaio"
 )
 
 // Hub - Abstraction between message publishers & subscribers,
 // works as a multiplexer ( or router )
 type Hub struct {
+	watcher        *gaio.Watcher
 	index          uint64
 	subLock        *sync.RWMutex
 	subscribers    map[string]map[uint64]net.Conn
@@ -56,6 +58,59 @@ func New(ctx context.Context, addr string, cap uint64) (*Hub, error) {
 	<-runEvict
 
 	return &hub, nil
+}
+
+func (h *Hub) listen(ctx context.Context, addr string, done chan bool) {
+	lis, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Printf("[pub0sub] Error : %s\n", err.Error())
+
+		done <- false
+		return
+	}
+
+	defer func() {
+		if err := lis.Close(); err != nil {
+			log.Printf("[pub0sub] Error : %s\n", err.Error())
+		}
+	}()
+
+	done <- true
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+
+		default:
+			conn, err := lis.Accept()
+			if err != nil {
+				log.Printf("[pub0sub] Error : %s\n", err.Error())
+				return
+			}
+
+			h.watcher.Read(ctx, conn, make([]byte, 5))
+		}
+	}
+}
+
+func (h *Hub) watch(ctx context.Context, done chan struct{}) {
+	close(done)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+
+		default:
+			_, err := h.watcher.WaitIO()
+			if err != nil {
+				log.Printf("[pub0sub] Error : %s\n", err.Error())
+				return
+			}
+
+		}
+	}
 }
 
 // publish - Actually writes message, along with opcode
