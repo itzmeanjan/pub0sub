@@ -68,11 +68,10 @@ func New(ctx context.Context, proto, addr string, cap uint64, topics ...string) 
 	go sub.listen(ctx, running)
 	<-running
 
-	op := ops.NEW_SUB_REQ
-	if _, err := op.WriteTo(sub.conn); err != nil {
+	sReq := ops.NewSubscriptionRequest{Topics: topics}
+	if _, err := sReq.WriteEnvelope(sub.conn); err != nil {
 		return nil, err
 	}
-	sReq := ops.NewSubscriptionRequest{Topics: topics}
 	if _, err := sReq.WriteTo(sub.conn); err != nil {
 		return nil, err
 	}
@@ -200,11 +199,10 @@ func (s *Subscriber) AddSubscription(topics ...string) (uint32, error) {
 	}
 	s.topicLock.Unlock()
 
-	op := ops.ADD_SUB_REQ
-	if _, err := op.WriteTo(s.conn); err != nil {
+	sReq := ops.AddSubscriptionRequest{Id: s.id, Topics: topics}
+	if _, err := sReq.WriteEnvelope(s.conn); err != nil {
 		return 0, err
 	}
-	sReq := ops.AddSubscriptionRequest{Id: s.id, Topics: topics}
 	if _, err := sReq.WriteTo(s.conn); err != nil {
 		return 0, err
 	}
@@ -235,11 +233,10 @@ func (s *Subscriber) Unsubscribe(topics ...string) (uint32, error) {
 	}
 	s.topicLock.Unlock()
 
-	op := ops.UNSUB_REQ
-	if _, err := op.WriteTo(s.conn); err != nil {
+	uReq := ops.UnsubcriptionRequest{Id: s.id, Topics: topics}
+	if _, err := uReq.WriteEnvelope(s.conn); err != nil {
 		return 0, err
 	}
-	uReq := ops.UnsubcriptionRequest{Id: s.id, Topics: topics}
 	if _, err := uReq.WriteTo(s.conn); err != nil {
 		return 0, err
 	}
@@ -270,11 +267,10 @@ func (s *Subscriber) UnsubscribeAll() (uint32, error) {
 	}
 	s.topicLock.Unlock()
 
-	op := ops.UNSUB_REQ
-	if _, err := op.WriteTo(s.conn); err != nil {
+	uReq := ops.UnsubcriptionRequest{Id: s.id, Topics: topics}
+	if _, err := uReq.WriteEnvelope(s.conn); err != nil {
 		return 0, err
 	}
-	uReq := ops.UnsubcriptionRequest{Id: s.id, Topics: topics}
 	if _, err := uReq.WriteTo(s.conn); err != nil {
 		return 0, err
 	}
