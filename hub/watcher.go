@@ -10,6 +10,12 @@ import (
 func (h *Hub) watch(ctx context.Context, done chan struct{}) {
 	close(done)
 
+	defer func() {
+		if err := h.watcher.Close(); err != nil {
+			log.Printf("[pub0sub] Error : %s\n", err.Error())
+		}
+	}()
+
 	for {
 		select {
 		case <-ctx.Done():

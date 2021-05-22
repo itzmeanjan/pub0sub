@@ -2,7 +2,6 @@ package hub
 
 import (
 	"context"
-	"errors"
 	"net"
 	"sync"
 
@@ -71,7 +70,7 @@ func New(ctx context.Context, addr string, cap uint64) (*Hub, error) {
 
 	go hub.listen(ctx, addr, runListener)
 	if !<-runListener {
-		return nil, errors.New("failed to start listener")
+		return nil, ops.ErrListenerNotStarted
 	}
 
 	go hub.watch(ctx, runWatcher)
