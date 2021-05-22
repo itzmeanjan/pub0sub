@@ -18,17 +18,18 @@ import (
 // Hub - Abstraction between message publishers & subscribers,
 // works as a multiplexer ( or router )
 type Hub struct {
-	watcher           *gaio.Watcher
-	pendingPublishers map[net.Conn]bool
-	index             uint64
-	subLock           *sync.RWMutex
-	subscribers       map[string]map[uint64]net.Conn
-	revLock           *sync.RWMutex
-	revSubscribers    map[uint64]map[string]bool
-	queueLock         *sync.RWMutex
-	pendingQueue      []*ops.Msg
-	ping              chan struct{}
-	evict             chan uint64
+	watcher               *gaio.Watcher
+	pendingPublishers     map[net.Conn]bool
+	pendingNewSubscribers map[net.Conn]bool
+	index                 uint64
+	subLock               *sync.RWMutex
+	subscribers           map[string]map[uint64]net.Conn
+	revLock               *sync.RWMutex
+	revSubscribers        map[uint64]map[string]bool
+	queueLock             *sync.RWMutex
+	pendingQueue          []*ops.Msg
+	ping                  chan struct{}
+	evict                 chan uint64
 }
 
 // New - Creates a new instance of hub, ready to be used
@@ -141,28 +142,55 @@ func (h *Hub) handleRead(ctx context.Context, result gaio.OpResult) error {
 
 	{
 		if _, ok := h.pendingPublishers[result.Conn]; ok {
-			payload := bytes.NewReader(data[:])
+			iStream := bytes.NewReader(data[:])
 
 			msg := new(ops.Msg)
-			if _, err := msg.ReadFrom(payload); err != nil {
+			if _, err := msg.ReadFrom(iStream); err != nil {
 				return err
 			}
 
 			subCount := h.Publish(msg)
-			resp := new(bytes.Buffer)
+			oStream := new(bytes.Buffer)
 
 			rOp := ops.PUB_RESP
-			if _, err := rOp.WriteTo(resp); err != nil {
+			if _, err := rOp.WriteTo(oStream); err != nil {
 				return err
 			}
 
 			cResp := ops.CountResponse(subCount)
-			if _, err := cResp.WriteTo(resp); err != nil {
+			if _, err := cResp.WriteTo(oStream); err != nil {
 				return err
 			}
 
 			delete(h.pendingPublishers, result.Conn)
-			return h.watcher.Write(ctx, result.Conn, resp.Bytes())
+			return h.watcher.Write(ctx, result.Conn, oStream.Bytes())
+		}
+	}
+
+	{
+		if _, ok := h.pendingNewSubscribers[result.Conn]; ok {
+			iStream := bytes.NewReader(data[:])
+
+			msg := new(ops.NewSubscriptionRequest)
+			if _, err := msg.ReadFrom(iStream); err != nil {
+				return err
+			}
+
+			subId, topicCount := h.Subscribe(result.Conn, msg.Topics...)
+			oStream := new(bytes.Buffer)
+
+			rOp := ops.NEW_SUB_RESP
+			if _, err := rOp.WriteTo(oStream); err != nil {
+				return err
+			}
+
+			sResp := ops.NewSubResponse{Id: subId, TopicCount: topicCount}
+			if _, err := sResp.WriteTo(oStream); err != nil {
+				return err
+			}
+
+			delete(h.pendingNewSubscribers, result.Conn)
+			return h.watcher.Write(ctx, result.Conn, oStream.Bytes())
 		}
 	}
 
@@ -177,6 +205,10 @@ func (h *Hub) handleRead(ctx context.Context, result gaio.OpResult) error {
 
 		if op == ops.PUB_REQ {
 			h.pendingPublishers[result.Conn] = true
+		}
+
+		if op == ops.NEW_SUB_REQ {
+			h.pendingNewSubscribers[result.Conn] = true
 		}
 
 		buf := make([]byte, size)
