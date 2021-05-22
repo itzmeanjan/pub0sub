@@ -18,18 +18,19 @@ import (
 // Hub - Abstraction between message publishers & subscribers,
 // works as a multiplexer ( or router )
 type Hub struct {
-	watcher               *gaio.Watcher
-	pendingPublishers     map[net.Conn]bool
-	pendingNewSubscribers map[net.Conn]bool
-	index                 uint64
-	subLock               *sync.RWMutex
-	subscribers           map[string]map[uint64]net.Conn
-	revLock               *sync.RWMutex
-	revSubscribers        map[uint64]map[string]bool
-	queueLock             *sync.RWMutex
-	pendingQueue          []*ops.Msg
-	ping                  chan struct{}
-	evict                 chan uint64
+	watcher                    *gaio.Watcher
+	pendingPublishers          map[net.Conn]bool
+	pendingNewSubscribers      map[net.Conn]bool
+	pendingExistingSubscribers map[net.Conn]bool
+	index                      uint64
+	subLock                    *sync.RWMutex
+	subscribers                map[string]map[uint64]net.Conn
+	revLock                    *sync.RWMutex
+	revSubscribers             map[uint64]map[string]bool
+	queueLock                  *sync.RWMutex
+	pendingQueue               []*ops.Msg
+	ping                       chan struct{}
+	evict                      chan uint64
 }
 
 // New - Creates a new instance of hub, ready to be used
@@ -194,6 +195,33 @@ func (h *Hub) handleRead(ctx context.Context, result gaio.OpResult) error {
 		}
 	}
 
+	{
+		if _, ok := h.pendingExistingSubscribers[result.Conn]; ok {
+			iStream := bytes.NewReader(data)
+
+			msg := new(ops.AddSubscriptionRequest)
+			if _, err := msg.ReadFrom(iStream); err != nil {
+				return err
+			}
+
+			topicCount := h.AddSubscription(msg.Id, result.Conn, msg.Topics...)
+			oStream := new(bytes.Buffer)
+
+			rOp := ops.ADD_SUB_RESP
+			if _, err := rOp.WriteTo(oStream); err != nil {
+				return err
+			}
+
+			pResp := ops.CountResponse(topicCount)
+			if _, err := pResp.WriteTo(oStream); err != nil {
+				return err
+			}
+
+			delete(h.pendingExistingSubscribers, result.Conn)
+			return h.watcher.Write(ctx, result.Conn, oStream.Bytes())
+		}
+	}
+
 	switch op := ops.OP(data[0]); op {
 	case ops.PUB_REQ, ops.NEW_SUB_REQ, ops.ADD_SUB_REQ, ops.UNSUB_REQ:
 		payloadSize := bytes.NewReader(data[1:])
@@ -209,6 +237,10 @@ func (h *Hub) handleRead(ctx context.Context, result gaio.OpResult) error {
 
 		if op == ops.NEW_SUB_REQ {
 			h.pendingNewSubscribers[result.Conn] = true
+		}
+
+		if op == ops.ADD_SUB_REQ {
+			h.pendingExistingSubscribers[result.Conn] = true
 		}
 
 		buf := make([]byte, size)
