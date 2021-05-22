@@ -23,15 +23,34 @@ func (m *Msg) size() uint32 {
 	return size
 }
 
-// WriteTo - Writes message to byte stream in recoverable form
-func (m *Msg) WriteTo(w io.Writer) (int64, error) {
+// WriteEnvelope - Publisher invokes for writing message envelope
+// so that Hub can understand `how to handle message ?`
+//
+// It also includes size of total message except 1-byte opcode
+// in a 4-byte field
+//
+// It should write 5-bytes into stream, in ideal condition
+func (m *Msg) WriteEnvelope(w io.Writer) (int64, error) {
 	var size int64
+
+	opCode := PUB_REQ
+	n, err := opCode.WriteTo(w)
+	if err != nil {
+		return size, err
+	}
+
+	size += n
 
 	if err := binary.Write(w, binary.BigEndian, m.size()); err != nil {
 		return size, err
 	}
 
-	size += 4
+	return size + 4, nil
+}
+
+// WriteTo - Writes message to byte stream in recoverable form
+func (m *Msg) WriteTo(w io.Writer) (int64, error) {
+	var size int64
 
 	lTopics := len(m.Topics)
 	if err := binary.Write(w, binary.BigEndian, uint8(lTopics)); err != nil {
@@ -74,13 +93,6 @@ func (m *Msg) WriteTo(w io.Writer) (int64, error) {
 // ReadFrom - Reconstructs message back from stream
 func (m *Msg) ReadFrom(r io.Reader) (int64, error) {
 	var size int64
-
-	var totalMsgSize uint32
-	if err := binary.Read(r, binary.BigEndian, &totalMsgSize); err != nil {
-		return size, err
-	}
-
-	size += 4
 
 	var lTopics uint8
 	if err := binary.Read(r, binary.BigEndian, &lTopics); err != nil {
