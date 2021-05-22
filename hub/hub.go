@@ -18,18 +18,17 @@ import (
 // Hub - Abstraction between message publishers & subscribers,
 // works as a multiplexer ( or router )
 type Hub struct {
-	watcher               *gaio.Watcher
-	pendingPublishersLock *sync.RWMutex
-	pendingPublishers     map[net.Conn]bool
-	index                 uint64
-	subLock               *sync.RWMutex
-	subscribers           map[string]map[uint64]net.Conn
-	revLock               *sync.RWMutex
-	revSubscribers        map[uint64]map[string]bool
-	queueLock             *sync.RWMutex
-	pendingQueue          []*ops.Msg
-	ping                  chan struct{}
-	evict                 chan uint64
+	watcher           *gaio.Watcher
+	pendingPublishers map[net.Conn]bool
+	index             uint64
+	subLock           *sync.RWMutex
+	subscribers       map[string]map[uint64]net.Conn
+	revLock           *sync.RWMutex
+	revSubscribers    map[uint64]map[string]bool
+	queueLock         *sync.RWMutex
+	pendingQueue      []*ops.Msg
+	ping              chan struct{}
+	evict             chan uint64
 }
 
 // New - Creates a new instance of hub, ready to be used
@@ -139,20 +138,8 @@ func (h *Hub) handleRead(ctx context.Context, result gaio.OpResult) error {
 	}
 
 	data := result.Buffer[:result.Size]
-	switch ops.OP(data[0]) {
-	case ops.PUB_REQ, ops.NEW_SUB_REQ, ops.ADD_SUB_REQ, ops.UNSUB_REQ:
-		payloadSize := bytes.NewReader(data[1:])
 
-		var size uint32
-		if err := binary.Read(payloadSize, binary.BigEndian, &size); err != nil {
-			return err
-		}
-
-		buf := make([]byte, size)
-		return h.watcher.Read(ctx, result.Conn, buf)
-
-	default:
-		h.pendingPublishersLock.RLock()
+	{
 		if _, ok := h.pendingPublishers[result.Conn]; ok {
 			payload := bytes.NewReader(data[:])
 
@@ -169,15 +156,34 @@ func (h *Hub) handleRead(ctx context.Context, result gaio.OpResult) error {
 				return err
 			}
 
-			pResp := ops.CountResponse(subCount)
-			if _, err := pResp.WriteTo(resp); err != nil {
+			cResp := ops.CountResponse(subCount)
+			if _, err := cResp.WriteTo(resp); err != nil {
 				return err
 			}
 
+			delete(h.pendingPublishers, result.Conn)
 			return h.watcher.Write(ctx, result.Conn, resp.Bytes())
 		}
-		h.pendingPublishersLock.RUnlock()
+	}
 
+	switch op := ops.OP(data[0]); op {
+	case ops.PUB_REQ, ops.NEW_SUB_REQ, ops.ADD_SUB_REQ, ops.UNSUB_REQ:
+		payloadSize := bytes.NewReader(data[1:])
+
+		var size uint32
+		if err := binary.Read(payloadSize, binary.BigEndian, &size); err != nil {
+			return err
+		}
+
+		if op == ops.PUB_REQ {
+			h.pendingPublishers[result.Conn] = true
+		}
+
+		buf := make([]byte, size)
+		return h.watcher.Read(ctx, result.Conn, buf)
+
+	default:
+		// non-defined behaviour as of now
 	}
 
 	return nil
