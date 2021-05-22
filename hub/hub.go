@@ -55,6 +55,7 @@ func New(ctx context.Context, addr string, cap uint64) (*Hub, error) {
 		pendingExistingSubscribers: make(map[net.Conn]bool),
 		pendingUnsubscribers:       make(map[net.Conn]bool),
 		enqueuedRead:               make(map[net.Conn]*enqueuedRead),
+		connectedSubscribers:       make(map[net.Conn]uint64),
 		index:                      0,
 		subLock:                    &sync.RWMutex{},
 		subscribers:                make(map[string]map[uint64]net.Conn),
