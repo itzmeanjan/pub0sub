@@ -15,6 +15,11 @@ import (
 	"github.com/xtaci/gaio"
 )
 
+type enqueuedRead struct {
+	yes bool
+	buf []byte
+}
+
 // Hub - Abstraction between message publishers & subscribers,
 // works as a multiplexer ( or router )
 type Hub struct {
@@ -23,6 +28,7 @@ type Hub struct {
 	pendingNewSubscribers      map[net.Conn]bool
 	pendingExistingSubscribers map[net.Conn]bool
 	pendingUnsubscribers       map[net.Conn]bool
+	enqueuedRead               map[net.Conn]*enqueuedRead
 	index                      uint64
 	subLock                    *sync.RWMutex
 	subscribers                map[string]map[uint64]net.Conn
@@ -95,7 +101,9 @@ func (h *Hub) listen(ctx context.Context, addr string, done chan bool) {
 				return
 			}
 
-			h.watcher.Read(ctx, conn, make([]byte, 5))
+			buf := make([]byte, 5)
+			h.enqueuedRead[conn] = &enqueuedRead{yes: true, buf: buf}
+			h.watcher.Read(ctx, conn, buf)
 		}
 	}
 }
@@ -124,6 +132,9 @@ func (h *Hub) watch(ctx context.Context, done chan struct{}) {
 					}
 
 				case gaio.OpWrite:
+					if err := h.handleWrite(ctx, results[i]); err != nil {
+						log.Printf("[pub0sub] Error : %s\n", err.Error())
+					}
 				}
 
 			}
@@ -275,11 +286,28 @@ func (h *Hub) handleRead(ctx context.Context, result gaio.OpResult) error {
 			h.pendingUnsubscribers[result.Conn] = true
 		}
 
-		buf := make([]byte, size)
-		return h.watcher.Read(ctx, result.Conn, buf)
+		if enqueued, ok := h.enqueuedRead[result.Conn]; ok && enqueued.yes {
+			enqueued.yes = false
+			return h.watcher.Read(ctx, result.Conn, enqueued.buf)
+		}
+
+		return errors.New("illegal envelope read completion event")
 
 	default:
 		// non-defined behaviour as of now
+	}
+
+	return nil
+}
+
+func (h *Hub) handleWrite(ctx context.Context, result gaio.OpResult) error {
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if enqueued, ok := h.enqueuedRead[result.Conn]; ok && !enqueued.yes {
+		enqueued.yes = true
+		return h.watcher.Read(ctx, result.Conn, enqueued.buf)
 	}
 
 	return nil
