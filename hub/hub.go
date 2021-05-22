@@ -29,6 +29,7 @@ type Hub struct {
 	pendingExistingSubscribers map[net.Conn]bool
 	pendingUnsubscribers       map[net.Conn]bool
 	enqueuedRead               map[net.Conn]*enqueuedRead
+	connectedSubscribers       map[net.Conn]uint64
 	index                      uint64
 	subLock                    *sync.RWMutex
 	subscribers                map[string]map[uint64]net.Conn
@@ -144,11 +145,27 @@ func (h *Hub) watch(ctx context.Context, done chan struct{}) {
 				case gaio.OpRead:
 					if err := h.handleRead(ctx, results[i]); err != nil {
 						log.Printf("[pub0sub] Error : %s\n", err.Error())
+
+						if id, ok := h.connectedSubscribers[results[i].Conn]; ok {
+							h.evict <- id
+							delete(h.connectedSubscribers, results[i].Conn)
+						}
+						if err := h.watcher.Free(results[i].Conn); err != nil {
+							log.Printf("[pub0sub] Error : %s\n", err.Error())
+						}
 					}
 
 				case gaio.OpWrite:
 					if err := h.handleWrite(ctx, results[i]); err != nil {
 						log.Printf("[pub0sub] Error : %s\n", err.Error())
+
+						if id, ok := h.connectedSubscribers[results[i].Conn]; ok {
+							h.evict <- id
+							delete(h.connectedSubscribers, results[i].Conn)
+						}
+						if err := h.watcher.Free(results[i].Conn); err != nil {
+							log.Printf("[pub0sub] Error : %s\n", err.Error())
+						}
 					}
 				}
 
@@ -205,6 +222,12 @@ func (h *Hub) handleRead(ctx context.Context, result gaio.OpResult) error {
 			}
 
 			subId, topicCount := h.subscribe(result.Conn, msg.Topics...)
+
+			// keeping track of active subscriber, so that
+			// when need can run eviction routine targeting
+			// this subscriber ( unique id )
+			h.connectedSubscribers[result.Conn] = subId
+
 			oStream := new(bytes.Buffer)
 
 			rOp := ops.NEW_SUB_RESP
