@@ -12,6 +12,44 @@ type UnsubcriptionRequest struct {
 	Topics []string
 }
 
+// Total size of message to be written into stream
+// as message envelope, so that Hub can figure out
+// how large buffer should it allocate for reading
+// whole message body
+func (u *UnsubcriptionRequest) size() uint32 {
+	var size uint32
+	size += 13 // ( --- <4B> + <8B> + <1B> --- )
+
+	for i := 0; i < len(u.Topics); i++ {
+		size += (1 + uint32(len(u.Topics[i])))
+	}
+
+	return size
+}
+
+// WriteEnvelope - Subscriber invokes for writing message envelope
+// so that Hub can understand `how to handle message ?`
+//
+// It also includes size of total message except first 1-byte opcode
+//
+// It should write 5-bytes into stream, in ideal condition
+func (u *UnsubcriptionRequest) WriteEnvelope(w io.Writer) (int64, error) {
+	var size int64
+
+	opCode := ADD_SUB_REQ
+	if _, err := opCode.WriteTo(w); err != nil {
+		return size, err
+	}
+
+	size += 1
+
+	if err := binary.Write(w, binary.BigEndian, u.size()); err != nil {
+		return size, err
+	}
+
+	return size + 4, nil
+}
+
 // WriteTo - Subscriber to write topic unsubcription request to stream
 func (u *UnsubcriptionRequest) WriteTo(w io.Writer) (int64, error) {
 	var size int64
@@ -23,19 +61,19 @@ func (u *UnsubcriptionRequest) WriteTo(w io.Writer) (int64, error) {
 	size += 8
 
 	lTopics := len(u.Topics)
-	if err := binary.Write(w, binary.BigEndian, uint32(lTopics)); err != nil {
+	if err := binary.Write(w, binary.BigEndian, uint8(lTopics)); err != nil {
 		return size, err
 	}
 
-	size += 4
+	size += 1
 
 	for i := 0; i < lTopics; i++ {
 		lTopic := len(u.Topics[i])
-		if err := binary.Write(w, binary.BigEndian, uint32(lTopic)); err != nil {
+		if err := binary.Write(w, binary.BigEndian, uint8(lTopic)); err != nil {
 			return size, err
 		}
 
-		size += 4
+		size += 1
 
 		if n, err := w.Write([]byte(u.Topics[i])); n != lTopic {
 			return size, err
@@ -57,21 +95,21 @@ func (u *UnsubcriptionRequest) ReadFrom(r io.Reader) (int64, error) {
 	}
 
 	size += 8
-	var lTopics uint32
+	var lTopics uint8
 	if err := binary.Read(r, binary.BigEndian, &lTopics); err != nil {
 		return size, err
 	}
 
-	size += 4
+	size += 1
 	topics := make([]string, 0, lTopics)
 
 	for i := 0; i < int(lTopics); i++ {
-		var lTopic uint32
+		var lTopic uint8
 		if err := binary.Read(r, binary.BigEndian, &lTopic); err != nil {
 			return size, err
 		}
 
-		size += 4
+		size += 1
 
 		topic := make([]byte, lTopic)
 		if n, err := r.Read(topic); n != int(lTopic) {
