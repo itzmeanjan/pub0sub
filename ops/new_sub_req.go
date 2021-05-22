@@ -16,7 +16,7 @@ type NewSubscriptionRequest struct {
 // of buffer for reading full message
 func (n *NewSubscriptionRequest) size() uint32 {
 	var size uint32
-	size += 5 // ( --- <4B> + <1B> --- )
+	size += 1 // ( --- <4B> + <1B> --- )
 
 	for i := 0; i < len(n.Topics); i++ {
 		size += (1 + uint32(len(n.Topics[i])))
@@ -27,8 +27,6 @@ func (n *NewSubscriptionRequest) size() uint32 {
 
 // WriteEnvelope - Subscriber invokes for writing message envelope
 // so that Hub can understand `how to handle message ?`
-//
-// It also includes size of total message except first 1-byte opcode
 //
 // It should write 5-bytes into stream, in ideal condition
 func (n *NewSubscriptionRequest) WriteEnvelope(w io.Writer) (int64, error) {

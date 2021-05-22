@@ -36,7 +36,11 @@ func (h *Hub) listen(ctx context.Context, addr string, done chan bool) {
 			}
 
 			buf := make([]byte, 5)
+
+			h.enqueuedReadLock.Lock()
 			h.enqueuedRead[conn] = &enqueuedRead{yes: true, buf: buf}
+			h.enqueuedReadLock.Unlock()
+
 			h.watcher.Read(ctx, conn, buf)
 		}
 	}

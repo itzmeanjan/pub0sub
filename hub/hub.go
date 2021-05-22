@@ -17,6 +17,7 @@ type Hub struct {
 	pendingNewSubscribers      map[net.Conn]bool
 	pendingExistingSubscribers map[net.Conn]bool
 	pendingUnsubscribers       map[net.Conn]bool
+	enqueuedReadLock           *sync.RWMutex
 	enqueuedRead               map[net.Conn]*enqueuedRead
 	connectedSubscribers       map[net.Conn]uint64
 	index                      uint64
@@ -48,6 +49,7 @@ func New(ctx context.Context, addr string, cap uint64) (*Hub, error) {
 		pendingNewSubscribers:      make(map[net.Conn]bool),
 		pendingExistingSubscribers: make(map[net.Conn]bool),
 		pendingUnsubscribers:       make(map[net.Conn]bool),
+		enqueuedReadLock:           &sync.RWMutex{},
 		enqueuedRead:               make(map[net.Conn]*enqueuedRead),
 		connectedSubscribers:       make(map[net.Conn]uint64),
 		index:                      0,

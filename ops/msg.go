@@ -14,7 +14,7 @@ type Msg pubsub.Message
 // Total size of message to be written into bytes stream
 func (m *Msg) size() uint32 {
 	var size uint32
-	size += 5 // ( --- <4B> + <1B> --- )
+	size += 1 // ( --- <1B> --- )
 
 	for i := 0; i < len(m.Topics); i++ {
 		size += (1 + uint32(len(m.Topics[i])))
@@ -26,8 +26,6 @@ func (m *Msg) size() uint32 {
 
 // WriteEnvelope - Publisher invokes for writing message envelope
 // so that Hub can understand `how to handle message ?`
-//
-// It also includes size of total message except first 1-byte opcode
 //
 // It should write 5-bytes into stream, in ideal condition
 func (m *Msg) WriteEnvelope(w io.Writer) (int64, error) {

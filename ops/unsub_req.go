@@ -19,7 +19,7 @@ type UnsubcriptionRequest struct {
 // whole message body
 func (u *UnsubcriptionRequest) size() uint32 {
 	var size uint32
-	size += 13 // ( --- <4B> + <8B> + <1B> --- )
+	size += 9 // ( --- <8B> + <1B> --- )
 
 	for i := 0; i < len(u.Topics); i++ {
 		size += (1 + uint32(len(u.Topics[i])))
@@ -31,14 +31,12 @@ func (u *UnsubcriptionRequest) size() uint32 {
 // WriteEnvelope - Subscriber invokes for writing message envelope
 // so that Hub can understand `how to handle message ?`
 //
-// It also includes size of total message except first 1-byte opcode
-//
 // It should write 5-bytes into stream, in ideal condition
 func (u *UnsubcriptionRequest) WriteEnvelope(w io.Writer) (int64, error) {
 	buf := new(bytes.Buffer)
 	var size int64
 
-	opCode := ADD_SUB_REQ
+	opCode := UNSUB_REQ
 	if _, err := opCode.WriteTo(buf); err != nil {
 		return size, err
 	}

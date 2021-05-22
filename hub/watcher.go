@@ -44,6 +44,11 @@ func (h *Hub) watch(ctx context.Context, done chan struct{}) {
 							h.evict <- id
 							delete(h.connectedSubscribers, results[i].Conn)
 						}
+
+						h.enqueuedReadLock.Lock()
+						delete(h.enqueuedRead, results[i].Conn)
+						h.enqueuedReadLock.Unlock()
+
 						if err := h.watcher.Free(results[i].Conn); err != nil {
 							log.Printf("[pub0sub] Error : %s\n", err.Error())
 						}
@@ -61,6 +66,11 @@ func (h *Hub) watch(ctx context.Context, done chan struct{}) {
 							h.evict <- id
 							delete(h.connectedSubscribers, results[i].Conn)
 						}
+
+						h.enqueuedReadLock.Lock()
+						delete(h.enqueuedRead, results[i].Conn)
+						h.enqueuedReadLock.Unlock()
+
 						if err := h.watcher.Free(results[i].Conn); err != nil {
 							log.Printf("[pub0sub] Error : %s\n", err.Error())
 						}

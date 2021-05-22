@@ -58,6 +58,8 @@ func (h *Hub) handleRead(ctx context.Context, result gaio.OpResult) error {
 			h.pendingUnsubscribers[result.Conn] = true
 		}
 
+		h.enqueuedReadLock.RLock()
+		defer h.enqueuedReadLock.RUnlock()
 		if enqueued, ok := h.enqueuedRead[result.Conn]; ok && enqueued.yes {
 			enqueued.yes = false
 
