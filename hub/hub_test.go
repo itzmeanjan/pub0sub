@@ -45,7 +45,7 @@ func TestHub(t *testing.T) {
 		t.Fatalf("Expected to publish to 1 subscriber, did to %d\n", n)
 	}
 
-	<-time.After(delay)
+	<-sub.Watch()
 	conMsg := sub.Next()
 	if conMsg == nil {
 		t.Fatalf("Expected to consume msg, found nothing\n")

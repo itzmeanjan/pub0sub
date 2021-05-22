@@ -1,6 +1,7 @@
 package ops
 
 import (
+	"bytes"
 	"encoding/binary"
 	"io"
 
@@ -30,17 +31,22 @@ func (m *Msg) size() uint32 {
 //
 // It should write 5-bytes into stream, in ideal condition
 func (m *Msg) WriteEnvelope(w io.Writer) (int64, error) {
+	buf := new(bytes.Buffer)
 	var size int64
 
 	opCode := PUB_REQ
-	n, err := opCode.WriteTo(w)
+	n, err := opCode.WriteTo(buf)
 	if err != nil {
 		return size, err
 	}
 
 	size += n
 
-	if err := binary.Write(w, binary.BigEndian, m.size()); err != nil {
+	if err := binary.Write(buf, binary.BigEndian, m.size()); err != nil {
+		return size, err
+	}
+
+	if _, err := w.Write(buf.Bytes()); err != nil {
 		return size, err
 	}
 
@@ -49,10 +55,11 @@ func (m *Msg) WriteEnvelope(w io.Writer) (int64, error) {
 
 // WriteTo - Writes message to byte stream in recoverable form
 func (m *Msg) WriteTo(w io.Writer) (int64, error) {
+	buf := new(bytes.Buffer)
 	var size int64
 
 	lTopics := len(m.Topics)
-	if err := binary.Write(w, binary.BigEndian, uint8(lTopics)); err != nil {
+	if err := binary.Write(buf, binary.BigEndian, uint8(lTopics)); err != nil {
 		return size, err
 	}
 
@@ -60,13 +67,13 @@ func (m *Msg) WriteTo(w io.Writer) (int64, error) {
 
 	for i := 0; i < lTopics; i++ {
 		lTopic := len(m.Topics[i])
-		if err := binary.Write(w, binary.BigEndian, uint8(lTopic)); err != nil {
+		if err := binary.Write(buf, binary.BigEndian, uint8(lTopic)); err != nil {
 			return size, err
 		}
 
 		size += 1
 
-		if n, err := w.Write([]byte(m.Topics[i])); n != lTopic {
+		if n, err := buf.Write([]byte(m.Topics[i])); n != lTopic {
 			return size, err
 		}
 
@@ -74,17 +81,21 @@ func (m *Msg) WriteTo(w io.Writer) (int64, error) {
 	}
 
 	lMsg := len(m.Data)
-	if err := binary.Write(w, binary.BigEndian, uint32(lMsg)); err != nil {
+	if err := binary.Write(buf, binary.BigEndian, uint32(lMsg)); err != nil {
 		return size, err
 	}
 
 	size += 4
 
-	if n, err := w.Write(m.Data); n != lMsg {
+	if n, err := buf.Write(m.Data); n != lMsg {
 		return size, err
 	}
 
 	size += int64(lMsg)
+
+	if _, err := w.Write(buf.Bytes()); err != nil {
+		return size, err
+	}
 
 	return size, nil
 }

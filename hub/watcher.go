@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"io"
 	"log"
 
 	"github.com/xtaci/gaio"
@@ -33,6 +34,10 @@ func (h *Hub) watch(ctx context.Context, done chan struct{}) {
 				switch results[i].Operation {
 				case gaio.OpRead:
 					if err := h.handleRead(ctx, results[i]); err != nil {
+						if err == io.EOF {
+							break
+						}
+
 						log.Printf("[pub0sub] Error : %s\n", err.Error())
 
 						if id, ok := h.connectedSubscribers[results[i].Conn]; ok {
@@ -46,6 +51,10 @@ func (h *Hub) watch(ctx context.Context, done chan struct{}) {
 
 				case gaio.OpWrite:
 					if err := h.handleWrite(ctx, results[i]); err != nil {
+						if err == io.EOF {
+							break
+						}
+
 						log.Printf("[pub0sub] Error : %s\n", err.Error())
 
 						if id, ok := h.connectedSubscribers[results[i].Conn]; ok {

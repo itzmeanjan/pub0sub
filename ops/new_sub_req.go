@@ -1,6 +1,7 @@
 package ops
 
 import (
+	"bytes"
 	"encoding/binary"
 	"io"
 )
@@ -31,16 +32,21 @@ func (n *NewSubscriptionRequest) size() uint32 {
 //
 // It should write 5-bytes into stream, in ideal condition
 func (n *NewSubscriptionRequest) WriteEnvelope(w io.Writer) (int64, error) {
+	buf := new(bytes.Buffer)
 	var size int64
 
 	opCode := NEW_SUB_REQ
-	if _, err := opCode.WriteTo(w); err != nil {
+	if _, err := opCode.WriteTo(buf); err != nil {
 		return size, err
 	}
 
 	size += 1
 
-	if err := binary.Write(w, binary.BigEndian, n.size()); err != nil {
+	if err := binary.Write(buf, binary.BigEndian, n.size()); err != nil {
+		return size, err
+	}
+
+	if _, err := w.Write(buf.Bytes()); err != nil {
 		return size, err
 	}
 
@@ -49,10 +55,11 @@ func (n *NewSubscriptionRequest) WriteEnvelope(w io.Writer) (int64, error) {
 
 // WriteTo - Writes subscription request to stream in recoverable form
 func (n *NewSubscriptionRequest) WriteTo(w io.Writer) (int64, error) {
+	buf := new(bytes.Buffer)
 	var size int64
 
 	lTopics := len(n.Topics)
-	if err := binary.Write(w, binary.BigEndian, uint8(lTopics)); err != nil {
+	if err := binary.Write(buf, binary.BigEndian, uint8(lTopics)); err != nil {
 		return size, err
 	}
 
@@ -60,17 +67,21 @@ func (n *NewSubscriptionRequest) WriteTo(w io.Writer) (int64, error) {
 
 	for i := 0; i < lTopics; i++ {
 		lTopic := len(n.Topics[i])
-		if err := binary.Write(w, binary.BigEndian, uint8(lTopic)); err != nil {
+		if err := binary.Write(buf, binary.BigEndian, uint8(lTopic)); err != nil {
 			return size, err
 		}
 
 		size += 1
 
-		if n, err := w.Write([]byte(n.Topics[i])); n != lTopic {
+		if n, err := buf.Write([]byte(n.Topics[i])); n != lTopic {
 			return size, err
 		}
 
 		size += int64(lTopic)
+	}
+
+	if _, err := w.Write(buf.Bytes()); err != nil {
+		return size, err
 	}
 
 	return size, nil

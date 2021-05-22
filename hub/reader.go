@@ -11,12 +11,8 @@ import (
 )
 
 func (h *Hub) handleRead(ctx context.Context, result gaio.OpResult) error {
-	if result.Error != nil {
-		return result.Error
-	}
-
 	if result.Size == 0 {
-		return ops.ErrEmptyRead
+		return nil
 	}
 
 	data := result.Buffer[:result.Size]
@@ -64,7 +60,9 @@ func (h *Hub) handleRead(ctx context.Context, result gaio.OpResult) error {
 
 		if enqueued, ok := h.enqueuedRead[result.Conn]; ok && enqueued.yes {
 			enqueued.yes = false
-			return h.watcher.Read(ctx, result.Conn, enqueued.buf)
+
+			buf := make([]byte, size)
+			return h.watcher.Read(ctx, result.Conn, buf)
 		}
 
 		return ops.ErrIllegalRead

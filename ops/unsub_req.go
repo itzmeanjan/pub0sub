@@ -1,6 +1,7 @@
 package ops
 
 import (
+	"bytes"
 	"encoding/binary"
 	"io"
 )
@@ -34,16 +35,21 @@ func (u *UnsubcriptionRequest) size() uint32 {
 //
 // It should write 5-bytes into stream, in ideal condition
 func (u *UnsubcriptionRequest) WriteEnvelope(w io.Writer) (int64, error) {
+	buf := new(bytes.Buffer)
 	var size int64
 
 	opCode := ADD_SUB_REQ
-	if _, err := opCode.WriteTo(w); err != nil {
+	if _, err := opCode.WriteTo(buf); err != nil {
 		return size, err
 	}
 
 	size += 1
 
-	if err := binary.Write(w, binary.BigEndian, u.size()); err != nil {
+	if err := binary.Write(buf, binary.BigEndian, u.size()); err != nil {
+		return size, err
+	}
+
+	if _, err := w.Write(buf.Bytes()); err != nil {
 		return size, err
 	}
 
@@ -52,16 +58,17 @@ func (u *UnsubcriptionRequest) WriteEnvelope(w io.Writer) (int64, error) {
 
 // WriteTo - Subscriber to write topic unsubcription request to stream
 func (u *UnsubcriptionRequest) WriteTo(w io.Writer) (int64, error) {
+	buf := new(bytes.Buffer)
 	var size int64
 
-	if err := binary.Write(w, binary.BigEndian, u.Id); err != nil {
+	if err := binary.Write(buf, binary.BigEndian, u.Id); err != nil {
 		return size, err
 	}
 
 	size += 8
 
 	lTopics := len(u.Topics)
-	if err := binary.Write(w, binary.BigEndian, uint8(lTopics)); err != nil {
+	if err := binary.Write(buf, binary.BigEndian, uint8(lTopics)); err != nil {
 		return size, err
 	}
 
@@ -69,17 +76,21 @@ func (u *UnsubcriptionRequest) WriteTo(w io.Writer) (int64, error) {
 
 	for i := 0; i < lTopics; i++ {
 		lTopic := len(u.Topics[i])
-		if err := binary.Write(w, binary.BigEndian, uint8(lTopic)); err != nil {
+		if err := binary.Write(buf, binary.BigEndian, uint8(lTopic)); err != nil {
 			return size, err
 		}
 
 		size += 1
 
-		if n, err := w.Write([]byte(u.Topics[i])); n != lTopic {
+		if n, err := buf.Write([]byte(u.Topics[i])); n != lTopic {
 			return size, err
 		}
 
 		size += int64(lTopic)
+	}
+
+	if _, err := w.Write(buf.Bytes()); err != nil {
+		return size, err
 	}
 
 	return size, nil
