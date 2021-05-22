@@ -22,6 +22,7 @@ type Hub struct {
 	pendingPublishers          map[net.Conn]bool
 	pendingNewSubscribers      map[net.Conn]bool
 	pendingExistingSubscribers map[net.Conn]bool
+	pendingUnsubscribers       map[net.Conn]bool
 	index                      uint64
 	subLock                    *sync.RWMutex
 	subscribers                map[string]map[uint64]net.Conn
@@ -222,6 +223,33 @@ func (h *Hub) handleRead(ctx context.Context, result gaio.OpResult) error {
 		}
 	}
 
+	{
+		if _, ok := h.pendingUnsubscribers[result.Conn]; ok {
+			iStream := bytes.NewReader(data)
+
+			msg := new(ops.UnsubcriptionRequest)
+			if _, err := msg.ReadFrom(iStream); err != nil {
+				return err
+			}
+
+			topicCount := h.Unsubscribe(msg.Id, msg.Topics...)
+			oStream := new(bytes.Buffer)
+
+			rOp := ops.UNSUB_RESP
+			if _, err := rOp.WriteTo(oStream); err != nil {
+				return err
+			}
+
+			pResp := ops.CountResponse(topicCount)
+			if _, err := pResp.WriteTo(oStream); err != nil {
+				return err
+			}
+
+			delete(h.pendingUnsubscribers, result.Conn)
+			return h.watcher.Write(ctx, result.Conn, oStream.Bytes())
+		}
+	}
+
 	switch op := ops.OP(data[0]); op {
 	case ops.PUB_REQ, ops.NEW_SUB_REQ, ops.ADD_SUB_REQ, ops.UNSUB_REQ:
 		payloadSize := bytes.NewReader(data[1:])
@@ -241,6 +269,10 @@ func (h *Hub) handleRead(ctx context.Context, result gaio.OpResult) error {
 
 		if op == ops.ADD_SUB_REQ {
 			h.pendingExistingSubscribers[result.Conn] = true
+		}
+
+		if op == ops.UNSUB_REQ {
+			h.pendingUnsubscribers[result.Conn] = true
 		}
 
 		buf := make([]byte, size)
