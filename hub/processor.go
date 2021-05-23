@@ -38,6 +38,10 @@ func (h *Hub) process(ctx context.Context, running chan struct{}) {
 }
 
 func (h *Hub) writeMessage(ctx context.Context, op *ops.OP, msg *ops.Msg) {
+	if msg == nil {
+		return
+	}
+
 	h.subLock.RLock()
 	defer h.subLock.RUnlock()
 

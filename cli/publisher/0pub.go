@@ -37,6 +37,7 @@ func main() {
 		port   = flag.Uint64("port", 13000, "Connect to port")
 		data   = flag.String("data", "hello", "Data to publish")
 		repeat = flag.Uint64("repeat", 1, "Repeat publish ( = 0 :-> infinite )")
+		delay  = flag.Duration("delay", time.Duration(100)*time.Millisecond, "gap between two message publish")
 		topics topicList
 	)
 	flag.Var(&topics, "topic", "Topic to publish data on")
@@ -69,6 +70,8 @@ func main() {
 				break OUT
 
 			default:
+				<-time.After(*delay)
+
 				n, err := pub.Publish(&msg)
 				if err != nil {
 					log.Printf("[0pub] Error : %s\n", err.Error())
