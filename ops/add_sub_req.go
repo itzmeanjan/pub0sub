@@ -33,21 +33,16 @@ func (a *AddSubscriptionRequest) size() uint32 {
 //
 // It should write 5-bytes into stream, in ideal condition
 func (a *AddSubscriptionRequest) WriteEnvelope(w io.Writer) (int64, error) {
-	buf := new(bytes.Buffer)
 	var size int64
 
 	opCode := ADD_SUB_REQ
-	if _, err := opCode.WriteTo(buf); err != nil {
+	if _, err := opCode.WriteTo(w); err != nil {
 		return size, err
 	}
 
 	size += 1
 
-	if err := binary.Write(buf, binary.BigEndian, a.size()); err != nil {
-		return size, err
-	}
-
-	if _, err := w.Write(buf.Bytes()); err != nil {
+	if err := binary.Write(w, binary.BigEndian, a.size()); err != nil {
 		return size, err
 	}
 

@@ -217,13 +217,34 @@ func (s *Subscriber) AddSubscription(topics ...string) (uint32, error) {
 	}
 	s.topicLock.Unlock()
 
+	// two parts of message to be written
+	// in two steps using this buffer ( into stream )
+	//
+	// <envelope> + <body>
+	var buf = new(bytes.Buffer)
+
+	// writing envelope
 	sReq := ops.AddSubscriptionRequest{Id: s.id, Topics: topics}
-	if _, err := sReq.WriteEnvelope(s.conn); err != nil {
+	if _, err := sReq.WriteEnvelope(buf); err != nil {
 		return 0, err
 	}
-	if _, err := sReq.WriteTo(s.conn); err != nil {
+	if _, err := s.conn.Write(buf.Bytes()); err != nil {
 		return 0, err
 	}
+
+	buf.Reset()
+
+	// Writing message body into stream
+	if _, err := sReq.WriteTo(buf); err != nil {
+		return 0, err
+	}
+	if _, err := s.conn.Write(buf.Bytes()); err != nil {
+		return 0, err
+	}
+
+	defer func() {
+		buf.Reset()
+	}()
 
 	resChan := make(chan uint32)
 	s.subUnsubChan <- resChan
