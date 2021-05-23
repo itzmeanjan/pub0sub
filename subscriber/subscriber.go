@@ -272,13 +272,30 @@ func (s *Subscriber) Unsubscribe(topics ...string) (uint32, error) {
 	}
 	s.topicLock.Unlock()
 
+	var buf = new(bytes.Buffer)
+
+	// Writing message envelope
 	uReq := ops.UnsubcriptionRequest{Id: s.id, Topics: topics}
-	if _, err := uReq.WriteEnvelope(s.conn); err != nil {
+	if _, err := uReq.WriteEnvelope(buf); err != nil {
 		return 0, err
 	}
-	if _, err := uReq.WriteTo(s.conn); err != nil {
+	if _, err := s.conn.Write(buf.Bytes()); err != nil {
 		return 0, err
 	}
+
+	buf.Reset()
+
+	// Writing message body
+	if _, err := uReq.WriteTo(buf); err != nil {
+		return 0, err
+	}
+	if _, err := s.conn.Write(buf.Bytes()); err != nil {
+		return 0, err
+	}
+
+	defer func() {
+		buf.Reset()
+	}()
 
 	resChan := make(chan uint32)
 	s.subUnsubChan <- resChan
@@ -306,13 +323,30 @@ func (s *Subscriber) UnsubscribeAll() (uint32, error) {
 	}
 	s.topicLock.Unlock()
 
+	var buf = new(bytes.Buffer)
+
+	// Writing message envelope
 	uReq := ops.UnsubcriptionRequest{Id: s.id, Topics: topics}
-	if _, err := uReq.WriteEnvelope(s.conn); err != nil {
+	if _, err := uReq.WriteEnvelope(buf); err != nil {
 		return 0, err
 	}
-	if _, err := uReq.WriteTo(s.conn); err != nil {
+	if _, err := s.conn.Write(buf.Bytes()); err != nil {
 		return 0, err
 	}
+
+	buf.Reset()
+
+	// Writing message body
+	if _, err := uReq.WriteTo(buf); err != nil {
+		return 0, err
+	}
+	if _, err := s.conn.Write(buf.Bytes()); err != nil {
+		return 0, err
+	}
+
+	defer func() {
+		buf.Reset()
+	}()
 
 	resChan := make(chan uint32)
 	s.subUnsubChan <- resChan
