@@ -2,7 +2,6 @@ package hub
 
 import (
 	"context"
-	"fmt"
 	"log"
 
 	"github.com/xtaci/gaio"
@@ -48,11 +47,6 @@ func (h *Hub) watch(ctx context.Context, done chan struct{}) {
 							log.Printf("[pub0sub] Error : %s\n", err.Error())
 						}
 
-						addr := fmt.Sprintf("%s://%s",
-							res.Conn.RemoteAddr().Network(),
-							res.Conn.RemoteAddr().String())
-						log.Printf("[pub0sub] ❌ Disconnected %s\n", addr)
-
 					}
 
 				case gaio.OpWrite:
@@ -70,11 +64,6 @@ func (h *Hub) watch(ctx context.Context, done chan struct{}) {
 						if err := h.watcher.Free(res.Conn); err != nil {
 							log.Printf("[pub0sub] Error : %s\n", err.Error())
 						}
-
-						addr := fmt.Sprintf("%s://%s",
-							res.Conn.RemoteAddr().Network(),
-							res.Conn.RemoteAddr().String())
-						log.Printf("[pub0sub] ❌ Disconnected %s\n", addr)
 
 					}
 				}

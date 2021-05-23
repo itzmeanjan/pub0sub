@@ -15,6 +15,10 @@ func (h *Hub) handleRead(ctx context.Context, result gaio.OpResult) error {
 		return result.Error
 	}
 
+	if result.Size == 0 {
+		return ops.ErrEmptyRead
+	}
+
 	data := result.Buffer[:result.Size]
 
 	// actual message body sent by client & body
