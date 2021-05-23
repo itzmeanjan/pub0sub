@@ -1,6 +1,9 @@
-package main
+// +build stress
+
+package pub0sub
 
 import (
+	"bytes"
 	"context"
 	"testing"
 	"time"
@@ -49,7 +52,13 @@ func parallelConnection(t *testing.T, count uint64) {
 	go func() {
 		var received uint64
 		for range sub.Watch() {
-			sub.Next()
+			msg := sub.Next()
+			if msg.Topic != topic_1 {
+				t.Errorf("Expected message from %s, received %s\n", topic_1, msg.Topic)
+			}
+			if !bytes.Equal(msg.Data, data) {
+				t.Errorf("Expected message %s, received %s\n", data, msg.Topic)
+			}
 
 			received++
 			if received >= count {
