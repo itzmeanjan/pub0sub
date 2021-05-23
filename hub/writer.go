@@ -7,6 +7,10 @@ import (
 )
 
 func (h *Hub) handleWrite(ctx context.Context, result gaio.OpResult) error {
+	if result.Error != nil {
+		return result.Error
+	}
+
 	h.enqueuedReadLock.RLock()
 	defer h.enqueuedReadLock.RUnlock()
 

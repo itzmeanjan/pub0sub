@@ -56,10 +56,6 @@ func (h *Hub) watch(ctx context.Context, done chan struct{}) {
 
 				case gaio.OpWrite:
 					if err := h.handleWrite(ctx, results[i]); err != nil {
-						if err == io.EOF {
-							break
-						}
-
 						log.Printf("[pub0sub] Error : %s\n", err.Error())
 
 						if id, ok := h.connectedSubscribers[results[i].Conn]; ok {

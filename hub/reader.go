@@ -11,29 +11,40 @@ import (
 )
 
 func (h *Hub) handleRead(ctx context.Context, result gaio.OpResult) error {
-	if result.Size == 0 {
-		return nil
+	if result.Error != nil {
+		return result.Error
 	}
 
 	data := result.Buffer[:result.Size]
 
+	// actual message body sent by client & body
+	// is ready for consumption
+	//
+	// Same scenario in {1, 2, 3, 4}, handling different opcodes
+
+	// 1
 	if _, ok := h.pendingPublishers[result.Conn]; ok {
 		return h.handleMessagePublish(ctx, result.Conn, data[:])
 	}
 
+	// 2
 	if _, ok := h.pendingNewSubscribers[result.Conn]; ok {
 		return h.handleNewSubscription(ctx, result.Conn, data[:])
 	}
 
+	// 3
 	if _, ok := h.pendingExistingSubscribers[result.Conn]; ok {
 		return h.handleUpdateSubscription(ctx, result.Conn, data[:])
 	}
 
+	// 4
 	if _, ok := h.pendingUnsubscribers[result.Conn]; ok {
 		return h.handleUnsubscription(ctx, result.Conn, data[:])
 	}
 
+	// Envelope sent by client
 	switch op := ops.OP(data[0]); op {
+
 	case ops.PUB_REQ, ops.NEW_SUB_REQ, ops.ADD_SUB_REQ, ops.UNSUB_REQ:
 		payloadSize := bytes.NewReader(data[1:])
 
@@ -42,20 +53,22 @@ func (h *Hub) handleRead(ctx context.Context, result gaio.OpResult) error {
 			return err
 		}
 
-		if op == ops.PUB_REQ {
+		// remembering when next time data is read from this
+		// connection, consider it as message payload read
+		// instead of message envelope read
+		switch op {
+		case ops.PUB_REQ:
 			h.pendingPublishers[result.Conn] = true
-		}
 
-		if op == ops.NEW_SUB_REQ {
+		case ops.NEW_SUB_REQ:
 			h.pendingNewSubscribers[result.Conn] = true
-		}
 
-		if op == ops.ADD_SUB_REQ {
+		case ops.ADD_SUB_REQ:
 			h.pendingExistingSubscribers[result.Conn] = true
-		}
 
-		if op == ops.UNSUB_REQ {
+		case ops.UNSUB_REQ:
 			h.pendingUnsubscribers[result.Conn] = true
+
 		}
 
 		h.enqueuedReadLock.RLock()
@@ -71,26 +84,26 @@ func (h *Hub) handleRead(ctx context.Context, result gaio.OpResult) error {
 
 	default:
 		return ops.ErrIllegalRead
-	}
 
+	}
 }
 
 func (h *Hub) handleMessagePublish(ctx context.Context, conn net.Conn, data []byte) error {
+	// reading message from stream
 	iStream := bytes.NewReader(data[:])
-
 	msg := new(ops.Msg)
 	if _, err := msg.ReadFrom(iStream); err != nil {
 		return err
 	}
 
 	subCount := h.publish(msg)
-	oStream := new(bytes.Buffer)
 
+	// writing message into stream
+	oStream := new(bytes.Buffer)
 	rOp := ops.PUB_RESP
 	if _, err := rOp.WriteTo(oStream); err != nil {
 		return err
 	}
-
 	cResp := ops.CountResponse(subCount)
 	if _, err := cResp.WriteTo(oStream); err != nil {
 		return err
@@ -101,8 +114,8 @@ func (h *Hub) handleMessagePublish(ctx context.Context, conn net.Conn, data []by
 }
 
 func (h *Hub) handleNewSubscription(ctx context.Context, conn net.Conn, data []byte) error {
+	// reading message from stream
 	iStream := bytes.NewReader(data[:])
-
 	msg := new(ops.NewSubscriptionRequest)
 	if _, err := msg.ReadFrom(iStream); err != nil {
 		return err
@@ -115,13 +128,12 @@ func (h *Hub) handleNewSubscription(ctx context.Context, conn net.Conn, data []b
 	// this subscriber ( unique id )
 	h.connectedSubscribers[conn] = subId
 
+	// writing message into stream
 	oStream := new(bytes.Buffer)
-
 	rOp := ops.NEW_SUB_RESP
 	if _, err := rOp.WriteTo(oStream); err != nil {
 		return err
 	}
-
 	sResp := ops.NewSubResponse{Id: subId, TopicCount: topicCount}
 	if _, err := sResp.WriteTo(oStream); err != nil {
 		return err
@@ -132,21 +144,21 @@ func (h *Hub) handleNewSubscription(ctx context.Context, conn net.Conn, data []b
 }
 
 func (h *Hub) handleUpdateSubscription(ctx context.Context, conn net.Conn, data []byte) error {
+	// reading message from stream
 	iStream := bytes.NewReader(data)
-
 	msg := new(ops.AddSubscriptionRequest)
 	if _, err := msg.ReadFrom(iStream); err != nil {
 		return err
 	}
 
 	topicCount := h.addSubscription(msg.Id, conn, msg.Topics...)
-	oStream := new(bytes.Buffer)
 
+	// writing message into stream
+	oStream := new(bytes.Buffer)
 	rOp := ops.ADD_SUB_RESP
 	if _, err := rOp.WriteTo(oStream); err != nil {
 		return err
 	}
-
 	pResp := ops.CountResponse(topicCount)
 	if _, err := pResp.WriteTo(oStream); err != nil {
 		return err
@@ -157,21 +169,21 @@ func (h *Hub) handleUpdateSubscription(ctx context.Context, conn net.Conn, data 
 }
 
 func (h *Hub) handleUnsubscription(ctx context.Context, conn net.Conn, data []byte) error {
+	// reading message from stream
 	iStream := bytes.NewReader(data)
-
 	msg := new(ops.UnsubcriptionRequest)
 	if _, err := msg.ReadFrom(iStream); err != nil {
 		return err
 	}
 
 	topicCount := h.unsubscribe(msg.Id, msg.Topics...)
-	oStream := new(bytes.Buffer)
 
+	// writing message into stream
+	oStream := new(bytes.Buffer)
 	rOp := ops.UNSUB_RESP
 	if _, err := rOp.WriteTo(oStream); err != nil {
 		return err
 	}
-
 	pResp := ops.CountResponse(topicCount)
 	if _, err := pResp.WriteTo(oStream); err != nil {
 		return err
