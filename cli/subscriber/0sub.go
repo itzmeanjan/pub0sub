@@ -71,8 +71,6 @@ func main() {
 		}
 	}()
 
-	sub.Disconnect()
-
 	interruptChan := make(chan os.Signal, 1)
 	signal.Notify(interruptChan, syscall.SIGTERM, syscall.SIGINT)
 

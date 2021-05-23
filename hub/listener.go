@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
 )
@@ -34,6 +35,11 @@ func (h *Hub) listen(ctx context.Context, addr string, done chan bool) {
 				log.Printf("[pub0sub] Error : %s\n", err.Error())
 				return
 			}
+
+			addr := fmt.Sprintf("%s://%s",
+				conn.RemoteAddr().Network(),
+				conn.RemoteAddr().String())
+			log.Printf("[pub0sub] ✅ Connected %s\n", addr)
 
 			buf := make([]byte, 5)
 

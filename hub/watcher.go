@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"github.com/xtaci/gaio"
@@ -28,47 +29,58 @@ func (h *Hub) watch(ctx context.Context, done chan struct{}) {
 				return
 			}
 
-			for i := 0; i < len(results); i++ {
+			for _, res := range results {
 
-				switch results[i].Operation {
+				switch res.Operation {
 				case gaio.OpRead:
-					if err := h.handleRead(ctx, results[i]); err != nil {
-						log.Printf("[pub0sub] Error : %s\n", err.Error())
+					if err := h.handleRead(ctx, res); err != nil {
 
-						if id, ok := h.connectedSubscribers[results[i].Conn]; ok {
+						if id, ok := h.connectedSubscribers[res.Conn]; ok {
 							h.evict <- id
-							delete(h.connectedSubscribers, results[i].Conn)
+							delete(h.connectedSubscribers, res.Conn)
 						}
 
 						h.enqueuedReadLock.Lock()
-						delete(h.enqueuedRead, results[i].Conn)
+						delete(h.enqueuedRead, res.Conn)
 						h.enqueuedReadLock.Unlock()
 
-						if err := h.watcher.Free(results[i].Conn); err != nil {
+						if err := h.watcher.Free(res.Conn); err != nil {
 							log.Printf("[pub0sub] Error : %s\n", err.Error())
 						}
+
+						addr := fmt.Sprintf("%s://%s",
+							res.Conn.RemoteAddr().Network(),
+							res.Conn.RemoteAddr().String())
+						log.Printf("[pub0sub] ❌ Disconnected %s\n", addr)
+
 					}
 
 				case gaio.OpWrite:
-					if err := h.handleWrite(ctx, results[i]); err != nil {
-						log.Printf("[pub0sub] Error : %s\n", err.Error())
+					if err := h.handleWrite(ctx, res); err != nil {
 
-						if id, ok := h.connectedSubscribers[results[i].Conn]; ok {
+						if id, ok := h.connectedSubscribers[res.Conn]; ok {
 							h.evict <- id
-							delete(h.connectedSubscribers, results[i].Conn)
+							delete(h.connectedSubscribers, res.Conn)
 						}
 
 						h.enqueuedReadLock.Lock()
-						delete(h.enqueuedRead, results[i].Conn)
+						delete(h.enqueuedRead, res.Conn)
 						h.enqueuedReadLock.Unlock()
 
-						if err := h.watcher.Free(results[i].Conn); err != nil {
+						if err := h.watcher.Free(res.Conn); err != nil {
 							log.Printf("[pub0sub] Error : %s\n", err.Error())
 						}
+
+						addr := fmt.Sprintf("%s://%s",
+							res.Conn.RemoteAddr().Network(),
+							res.Conn.RemoteAddr().String())
+						log.Printf("[pub0sub] ❌ Disconnected %s\n", addr)
+
 					}
 				}
 
 			}
+
 		}
 	}
 }
