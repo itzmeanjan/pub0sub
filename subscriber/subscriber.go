@@ -1,6 +1,7 @@
 package subscriber
 
 import (
+	"bytes"
 	"context"
 	"log"
 	"net"
@@ -68,13 +69,30 @@ func New(ctx context.Context, proto, addr string, cap uint64, topics ...string) 
 	go sub.listen(ctx, running)
 	<-running
 
+	var buf = new(bytes.Buffer)
+
+	// writes envelope
 	sReq := ops.NewSubscriptionRequest{Topics: topics}
-	if _, err := sReq.WriteEnvelope(sub.conn); err != nil {
+	if _, err := sReq.WriteEnvelope(buf); err != nil {
 		return nil, err
 	}
-	if _, err := sReq.WriteTo(sub.conn); err != nil {
+	if _, err := sub.conn.Write(buf.Bytes()); err != nil {
 		return nil, err
 	}
+
+	buf.Reset()
+
+	// writes message body
+	if _, err := sReq.WriteTo(buf); err != nil {
+		return nil, err
+	}
+	if _, err := sub.conn.Write(buf.Bytes()); err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		buf.Reset()
+	}()
 
 	resChan := make(chan newSubscriptionResponse)
 	sub.newSubChan <- resChan
