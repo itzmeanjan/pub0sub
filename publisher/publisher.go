@@ -89,6 +89,10 @@ func (p *Publisher) send(msg *ops.Msg) (uint64, error) {
 		return 0, err
 	}
 
+	defer func() {
+		buf.Reset()
+	}()
+
 	// read peer's opcode i.e. determine message intent
 	rOp := new(ops.OP)
 	if _, err := rOp.ReadFrom(p.conn); err != nil {
