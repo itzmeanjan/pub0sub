@@ -1,6 +1,7 @@
 package subscriber
 
 import (
+	"bytes"
 	"context"
 	"log"
 	"net"
@@ -68,14 +69,30 @@ func New(ctx context.Context, proto, addr string, cap uint64, topics ...string) 
 	go sub.listen(ctx, running)
 	<-running
 
-	op := ops.NEW_SUB_REQ
-	if _, err := op.WriteTo(sub.conn); err != nil {
-		return nil, err
-	}
+	var buf = new(bytes.Buffer)
+
+	// writes envelope
 	sReq := ops.NewSubscriptionRequest{Topics: topics}
-	if _, err := sReq.WriteTo(sub.conn); err != nil {
+	if _, err := sReq.WriteEnvelope(buf); err != nil {
 		return nil, err
 	}
+	if _, err := sub.conn.Write(buf.Bytes()); err != nil {
+		return nil, err
+	}
+
+	buf.Reset()
+
+	// writes message body
+	if _, err := sReq.WriteTo(buf); err != nil {
+		return nil, err
+	}
+	if _, err := sub.conn.Write(buf.Bytes()); err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		buf.Reset()
+	}()
 
 	resChan := make(chan newSubscriptionResponse)
 	sub.newSubChan <- resChan
@@ -200,14 +217,34 @@ func (s *Subscriber) AddSubscription(topics ...string) (uint32, error) {
 	}
 	s.topicLock.Unlock()
 
-	op := ops.ADD_SUB_REQ
-	if _, err := op.WriteTo(s.conn); err != nil {
-		return 0, err
-	}
+	// two parts of message to be written
+	// in two steps using this buffer ( into stream )
+	//
+	// <envelope> + <body>
+	var buf = new(bytes.Buffer)
+
+	// writing envelope
 	sReq := ops.AddSubscriptionRequest{Id: s.id, Topics: topics}
-	if _, err := sReq.WriteTo(s.conn); err != nil {
+	if _, err := sReq.WriteEnvelope(buf); err != nil {
 		return 0, err
 	}
+	if _, err := s.conn.Write(buf.Bytes()); err != nil {
+		return 0, err
+	}
+
+	buf.Reset()
+
+	// Writing message body into stream
+	if _, err := sReq.WriteTo(buf); err != nil {
+		return 0, err
+	}
+	if _, err := s.conn.Write(buf.Bytes()); err != nil {
+		return 0, err
+	}
+
+	defer func() {
+		buf.Reset()
+	}()
 
 	resChan := make(chan uint32)
 	s.subUnsubChan <- resChan
@@ -235,14 +272,30 @@ func (s *Subscriber) Unsubscribe(topics ...string) (uint32, error) {
 	}
 	s.topicLock.Unlock()
 
-	op := ops.UNSUB_REQ
-	if _, err := op.WriteTo(s.conn); err != nil {
-		return 0, err
-	}
+	var buf = new(bytes.Buffer)
+
+	// Writing message envelope
 	uReq := ops.UnsubcriptionRequest{Id: s.id, Topics: topics}
-	if _, err := uReq.WriteTo(s.conn); err != nil {
+	if _, err := uReq.WriteEnvelope(buf); err != nil {
 		return 0, err
 	}
+	if _, err := s.conn.Write(buf.Bytes()); err != nil {
+		return 0, err
+	}
+
+	buf.Reset()
+
+	// Writing message body
+	if _, err := uReq.WriteTo(buf); err != nil {
+		return 0, err
+	}
+	if _, err := s.conn.Write(buf.Bytes()); err != nil {
+		return 0, err
+	}
+
+	defer func() {
+		buf.Reset()
+	}()
 
 	resChan := make(chan uint32)
 	s.subUnsubChan <- resChan
@@ -270,14 +323,30 @@ func (s *Subscriber) UnsubscribeAll() (uint32, error) {
 	}
 	s.topicLock.Unlock()
 
-	op := ops.UNSUB_REQ
-	if _, err := op.WriteTo(s.conn); err != nil {
-		return 0, err
-	}
+	var buf = new(bytes.Buffer)
+
+	// Writing message envelope
 	uReq := ops.UnsubcriptionRequest{Id: s.id, Topics: topics}
-	if _, err := uReq.WriteTo(s.conn); err != nil {
+	if _, err := uReq.WriteEnvelope(buf); err != nil {
 		return 0, err
 	}
+	if _, err := s.conn.Write(buf.Bytes()); err != nil {
+		return 0, err
+	}
+
+	buf.Reset()
+
+	// Writing message body
+	if _, err := uReq.WriteTo(buf); err != nil {
+		return 0, err
+	}
+	if _, err := s.conn.Write(buf.Bytes()); err != nil {
+		return 0, err
+	}
+
+	defer func() {
+		buf.Reset()
+	}()
 
 	resChan := make(chan uint32)
 	s.subUnsubChan <- resChan

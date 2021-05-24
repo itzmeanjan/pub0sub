@@ -1,6 +1,7 @@
 package publisher
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"log"
@@ -68,16 +69,29 @@ func (p *Publisher) start(ctx context.Context, running chan struct{}) {
 // send - Writes publish intent message to stream & reads response back
 func (p *Publisher) send(msg *ops.Msg) (uint64, error) {
 
-	// first write opcode
-	op := ops.PUB_REQ
-	if _, err := op.WriteTo(p.conn); err != nil {
+	var buf = new(bytes.Buffer)
+
+	// first write message envelope
+	if _, err := msg.WriteEnvelope(buf); err != nil {
+		return 0, err
+	}
+	if _, err := p.conn.Write(buf.Bytes()); err != nil {
 		return 0, err
 	}
 
+	buf.Reset()
+
 	// then write actual message
-	if _, err := msg.WriteTo(p.conn); err != nil {
+	if _, err := msg.WriteTo(buf); err != nil {
 		return 0, err
 	}
+	if _, err := p.conn.Write(buf.Bytes()); err != nil {
+		return 0, err
+	}
+
+	defer func() {
+		buf.Reset()
+	}()
 
 	// read peer's opcode i.e. determine message intent
 	rOp := new(ops.OP)

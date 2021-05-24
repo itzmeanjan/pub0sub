@@ -25,6 +25,9 @@ var (
 	ErrTerminateConnection  = errors.New("unsupported opcode, begin connection tear down")
 	ErrConnectionTerminated = errors.New("connection already teared down")
 	ErrEmptyTopicSet        = errors.New("topic list is empty")
+	ErrListenerNotStarted   = errors.New("failed to start listener")
+	ErrEmptyRead            = errors.New("read zero bytes from socket")
+	ErrIllegalRead          = errors.New("illegal envelope read completion event")
 )
 
 // WriteTo - Writes operation type to stream, so that

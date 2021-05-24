@@ -1,5 +1,5 @@
 # pub0sub
-Fast, Lightweight Pub/Sub over TCP, QUIC
+Fast, Lightweight Pub/Sub over TCP, QUIC - **powered by Async I/O**
 
 ## Motivation
 
@@ -25,6 +25,10 @@ What it gives us is, ability to publish messages to topics over network, where *
 ## Architecture
 
 ![architecture](./sc/architecture.jpg)
+
+![async-io-model](./sc/async-io.jpg)
+
+![wire-format](./sc/wire-format.jpg)
 
 ## Install
 
@@ -252,5 +256,23 @@ if err := sub.Disconnect(); err != nil {
     log.Println(err.Error())
 }
 ```
+
+## Test
+
+For running all test cases
+
+```bash
+go test -v -race -covermode=atomic ./... # excludes `stress` testing, check 👇
+```
+
+For running **stress** testing with **1k, 2k, 4k, 8k** simultaneous TCP connections
+
+```bash
+go test -v -tags stress -run=8k # also try 1k/ 2k/ 4k
+```
+
+![stress-testing](./sc/stress-testing.png)
+
+> Make sure your system is able to open **> 8k** file handles at a time or you'll get `too many open files`
 
 **More coming soon**

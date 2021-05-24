@@ -23,7 +23,7 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	fullAddr := fmt.Sprintf("%s:%d", *addr, *port)
-	_, err := hub.New(ctx, fullAddr, *capacity)
+	h, err := hub.New(ctx, fullAddr, *capacity)
 	if err != nil {
 		log.Printf("[0hub] Error : %s\n", err.Error())
 		return
@@ -33,9 +33,23 @@ func main() {
 	interruptChan := make(chan os.Signal, 1)
 	signal.Notify(interruptChan, syscall.SIGTERM, syscall.SIGINT)
 
-	<-interruptChan
-	cancel()
-	<-time.After(time.Second)
+LOOP:
+	for {
+		select {
+		case <-interruptChan:
+			cancel()
+
+			<-time.After(time.Second)
+			break LOOP
+
+		case addr := <-h.Connected:
+			log.Printf("[0hub] Connected %s\n", addr)
+
+		case addr := <-h.Disconnected:
+			log.Printf("[0hub] Disconnected %s\n", addr)
+
+		}
+	}
 
 	log.Printf("[0hub] Graceful shutdown\n")
 }
