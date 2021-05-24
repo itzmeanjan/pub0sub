@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
 )
@@ -33,6 +34,11 @@ func (h *Hub) listen(ctx context.Context, addr string, done chan bool) {
 			if err != nil {
 				log.Printf("[pub0sub] Error : %s\n", err.Error())
 				return
+			}
+
+			// best effort mechanism, don't ever block
+			if len(h.Connected) < cap(h.Connected) {
+				h.Connected <- fmt.Sprintf("%s://%s", conn.RemoteAddr().Network(), conn.RemoteAddr().String())
 			}
 
 			h.enqueuedReadLock.Lock()

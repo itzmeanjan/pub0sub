@@ -29,6 +29,8 @@ type Hub struct {
 	pendingQueue               []*ops.Msg
 	ping                       chan struct{}
 	evict                      chan uint64
+	Connected                  chan string
+	Disconnected               chan string
 }
 
 type enqueuedRead struct {
@@ -61,6 +63,8 @@ func New(ctx context.Context, addr string, cap uint64) (*Hub, error) {
 		pendingQueue:               make([]*ops.Msg, 0, cap),
 		ping:                       make(chan struct{}, cap),
 		evict:                      make(chan uint64, cap),
+		Connected:                  make(chan string, 1),
+		Disconnected:               make(chan string, 1),
 	}
 
 	var (

@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"github.com/xtaci/gaio"
@@ -34,6 +35,11 @@ func (h *Hub) watch(ctx context.Context, done chan struct{}) {
 				case gaio.OpRead:
 					if err := h.handleRead(ctx, res); err != nil {
 
+						// best effort mechanism, don't ever block
+						if len(h.Disconnected) < cap(h.Disconnected) {
+							h.Disconnected <- fmt.Sprintf("%s://%s", res.Conn.RemoteAddr().Network(), res.Conn.RemoteAddr().String())
+						}
+
 						if id, ok := h.connectedSubscribers[res.Conn]; ok {
 							h.evict <- id
 							delete(h.connectedSubscribers, res.Conn)
@@ -51,6 +57,11 @@ func (h *Hub) watch(ctx context.Context, done chan struct{}) {
 
 				case gaio.OpWrite:
 					if err := h.handleWrite(ctx, res); err != nil {
+
+						// best effort mechanism, don't ever block
+						if len(h.Disconnected) < cap(h.Disconnected) {
+							h.Disconnected <- fmt.Sprintf("%s://%s", res.Conn.RemoteAddr().Network(), res.Conn.RemoteAddr().String())
+						}
 
 						if id, ok := h.connectedSubscribers[res.Conn]; ok {
 							h.evict <- id
