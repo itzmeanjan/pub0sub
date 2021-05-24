@@ -46,7 +46,10 @@ func (h *Hub) listen(ctx context.Context, addr string, done chan bool) {
 			h.enqueuedRead[conn] = &enqueuedRead{yes: true, buf: buf}
 			h.enqueuedReadLock.Unlock()
 
-			h.watcher.Read(ctx, conn, buf)
+			if err := h.watcher.Read(ctx, conn, buf); err != nil {
+				log.Printf("[pub0sub] Error : %s\n", err.Error())
+				return
+			}
 		}
 	}
 }
