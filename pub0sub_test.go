@@ -98,15 +98,15 @@ func parallelConnection(t *testing.T, count uint64) {
 }
 
 func BenchmarkPublisher4Topics(b *testing.B) {
-	benchmarkPublisher(b, 4, 1<<12)
+	benchmarkPublisher(b, 1<<2, 1<<12)
 }
 
 func BenchmarkPublisher32Topics(b *testing.B) {
-	benchmarkPublisher(b, 32, 1<<12)
+	benchmarkPublisher(b, 1<<5, 1<<12)
 }
 
 func BenchmarkPublisher255Topics(b *testing.B) {
-	benchmarkPublisher(b, 255, 1<<12)
+	benchmarkPublisher(b, 1<<8-1, 1<<12)
 }
 
 func generateRandomData(bLen uint64) []byte {
@@ -173,5 +173,72 @@ func benchmarkPublisher(b *testing.B, topicC uint64, msgLen uint64) {
 		if n != topicC {
 			b.Fatalf("Expected to publish to %d subscribers, did to %d\n", topicC, n)
 		}
+	}
+}
+
+func BenchmarkSubscriber4Topics(b *testing.B) {
+	benchmarkSubscriber(b, 1<<2, 1<<13)
+}
+
+func BenchmarkSubscriber32Topics(b *testing.B) {
+	benchmarkSubscriber(b, 1<<5, 1<<13)
+}
+
+func BenchmarkSubscriber255Topics(b *testing.B) {
+	benchmarkSubscriber(b, 1<<8-1, 1<<13)
+}
+
+func benchmarkSubscriber(b *testing.B, topicC uint64, msgLen uint64) {
+	addr := "127.0.0.1:0"
+	proto := "tcp"
+	capacity := uint64(16)
+	topics, bLen := generateTopics(topicC)
+	data := generateRandomData(msgLen)
+	msg := ops.Msg{Topics: topics, Data: data}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		cancel()
+		<-time.After(time.Duration(100) * time.Millisecond)
+	}()
+
+	hub, err := hub.New(ctx, addr, capacity)
+	if err != nil {
+		b.Fatalf("Failed to start Hub : %s\n", err.Error())
+	}
+
+	sub, err := subscriber.New(ctx, proto, hub.Addr(), capacity, topics...)
+	if err != nil {
+		b.Fatalf("Failed to start subscriber : %s\n", err.Error())
+	}
+	defer func() {
+		sub.UnsubscribeAll()
+		sub.Disconnect()
+	}()
+
+	pub, err := publisher.New(ctx, proto, hub.Addr())
+	if err != nil {
+		b.Fatalf("Failed to start publisher : %s\n", err.Error())
+	}
+
+	b.ReportAllocs()
+	b.SetBytes(int64((6 + bLen + 4 + msgLen) * topicC))
+	b.ResetTimer()
+
+	var target uint64
+	for i := 0; i < b.N; i++ {
+		n, err := pub.Publish(&msg)
+		if err != nil {
+			b.Fatalf("Failed to publish : %s\n", err.Error())
+		}
+		if n != topicC {
+			b.Fatalf("Expected to publish to %d subscribers, did to %d\n", topicC, n)
+		}
+
+		target += n
+	}
+
+	for i := 0; i < int(target); i++ {
+		sub.Next()
 	}
 }
