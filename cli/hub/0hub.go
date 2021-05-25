@@ -28,7 +28,7 @@ func main() {
 		log.Printf("[0hub] Error : %s\n", err.Error())
 		return
 	}
-	log.Printf("[0hub] Listening on %s\n", fullAddr)
+	log.Printf("[0hub] Listening on %s\n", h.Addr())
 
 	interruptChan := make(chan os.Signal, 1)
 	signal.Notify(interruptChan, syscall.SIGTERM, syscall.SIGINT)

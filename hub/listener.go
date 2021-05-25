@@ -22,6 +22,7 @@ func (h *Hub) listen(ctx context.Context, addr string, done chan bool) {
 		}
 	}()
 
+	h.addr = lis.Addr().String()
 	done <- true
 
 	for {

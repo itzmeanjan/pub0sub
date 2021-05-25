@@ -12,6 +12,7 @@ import (
 // Hub - Abstraction between message publishers & subscribers,
 // works as a multiplexer ( or router )
 type Hub struct {
+	addr                       string
 	watcher                    *gaio.Watcher
 	pendingPublishers          map[net.Conn]bool
 	pendingNewSubscribers      map[net.Conn]bool
@@ -31,6 +32,10 @@ type Hub struct {
 	evict                      chan uint64
 	Connected                  chan string
 	Disconnected               chan string
+}
+
+func (h *Hub) Addr() string {
+	return h.addr
 }
 
 type enqueuedRead struct {
