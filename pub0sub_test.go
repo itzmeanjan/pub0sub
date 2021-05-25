@@ -5,6 +5,7 @@ package pub0sub
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"fmt"
 	"testing"
 	"time"
@@ -97,15 +98,21 @@ func parallelConnection(t *testing.T, count uint64) {
 }
 
 func BenchmarkPublisher4Topics(b *testing.B) {
-	benchmarkPublisher(b, 4)
+	benchmarkPublisher(b, 4, 1<<12)
 }
 
 func BenchmarkPublisher32Topics(b *testing.B) {
-	benchmarkPublisher(b, 32)
+	benchmarkPublisher(b, 32, 1<<12)
 }
 
 func BenchmarkPublisher255Topics(b *testing.B) {
-	benchmarkPublisher(b, 255)
+	benchmarkPublisher(b, 255, 1<<12)
+}
+
+func generateRandomData(bLen uint64) []byte {
+	data := make([]byte, bLen)
+	rand.Read(data)
+	return data
 }
 
 func generateTopics(count uint64) ([]string, uint64) {
@@ -121,12 +128,12 @@ func generateTopics(count uint64) ([]string, uint64) {
 	return topics, bLen
 }
 
-func benchmarkPublisher(b *testing.B, topicC uint64) {
+func benchmarkPublisher(b *testing.B, topicC uint64, msgLen uint64) {
 	addr := "127.0.0.1:0"
 	proto := "tcp"
 	capacity := uint64(16)
 	topics, bLen := generateTopics(topicC)
-	data := []byte("hello")
+	data := generateRandomData(msgLen)
 	msg := ops.Msg{Topics: topics, Data: data}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -155,7 +162,7 @@ func benchmarkPublisher(b *testing.B, topicC uint64) {
 	}
 
 	b.ReportAllocs()
-	b.SetBytes(int64(15 + bLen))
+	b.SetBytes(int64((6 + bLen + 4 + msgLen) * topicC))
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
