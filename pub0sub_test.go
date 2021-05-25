@@ -242,3 +242,69 @@ func benchmarkSubscriber(b *testing.B, topicC uint64, msgLen uint64) {
 		sub.Next()
 	}
 }
+
+func generateNextNTopics(start uint64, count uint64) []string {
+	topics := make([]string, 0, count)
+
+	for i := start; i < start+count; i++ {
+		topics = append(topics, fmt.Sprintf("topic_%010d", i))
+	}
+
+	return topics
+}
+
+func Benchmark4TopicSubscription(b *testing.B) {
+	benchmarkTopicSubscription(b, 1<<2)
+}
+
+func Benchmark32TopicSubscription(b *testing.B) {
+	benchmarkTopicSubscription(b, 1<<5)
+}
+
+func Benchmark255TopicSubscription(b *testing.B) {
+	benchmarkTopicSubscription(b, 1<<8-1)
+}
+
+func benchmarkTopicSubscription(b *testing.B, topicC uint64) {
+	addr := "127.0.0.1:0"
+	proto := "tcp"
+	capacity := uint64(16)
+	topic_1 := "topic_1"
+	topics := []string{topic_1}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		cancel()
+		<-time.After(time.Duration(100) * time.Millisecond)
+	}()
+
+	hub, err := hub.New(ctx, addr, capacity)
+	if err != nil {
+		b.Fatalf("Failed to start Hub : %s\n", err.Error())
+	}
+
+	sub, err := subscriber.New(ctx, proto, hub.Addr(), capacity, topics...)
+	if err != nil {
+		b.Fatalf("Failed to start subscriber : %s\n", err.Error())
+	}
+	defer func() {
+		sub.UnsubscribeAll()
+		sub.Disconnect()
+	}()
+
+	b.ReportAllocs()
+	b.SetBytes(int64(5 + 9 + topicC*17))
+	b.ResetTimer()
+
+	var start uint64 = 1
+	for i := 0; i < b.N; i++ {
+		n, err := sub.AddSubscription(generateNextNTopics(start, topicC)...)
+		if err != nil {
+			b.Errorf("Topic subscription failed : %s\n", err.Error())
+		}
+		if n != uint32(topicC) {
+			b.Errorf("Expected to subscribe to %d topic, did to %d\n", topicC, n)
+		}
+		start += topicC
+	}
+}
