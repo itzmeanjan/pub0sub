@@ -275,4 +275,30 @@ go test -v -tags stress -run=8k # also try 1k/ 2k/ 4k
 
 > Make sure your system is able to open **> 8k** file handles at a time or you'll get `too many open files`
 
+## Benchmarking
+
+Publisher's message publish flow
+
+```bash
+go test -run=XXX -tags stress -bench Publisher
+```
+
+![publisher](sc/benchmark-publiser.png)
+
+Subscriber's message consumption flow
+
+```bash
+go test -run=XXX -tags stress -bench Subscriber
+```
+
+![subscriber](sc/benchmark-subscriber.png)
+
+Subscriber's topic subscription flow
+
+```bash
+go test -run=XXX -tags stress -bench TopicSubscription
+```
+
+![topic_subscription](sc/benchmark-topic-subscription.png)
+
 **More coming soon**
