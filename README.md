@@ -35,7 +35,7 @@ What it gives us is, ability to publish messages to topics over network, where *
 Add `pub0sub` into your project _( **GOMOD** enabled )_
 
 ```bash
-go get -u github.com/itzmeanjan/pub0sub
+go get -u github.com/itzmeanjan/pub0sub/...
 ```
 
 ## Usage
@@ -300,5 +300,11 @@ go test -run=XXX -tags stress -bench TopicSubscription
 ```
 
 ![topic_subscription](sc/benchmark-topic-subscription.png)
+
+## Simulator
+
+I wrote one simulator-visualiser tool --- which can be used for testing `0hub` with flexible configuration. You can ask it to use **N** -concurrent clients, all sending/ receiving messages to/ from **M** -topics. Finally it generates some simple visuals depicting performance.
+
+Check [here](https://github.com/itzmeanjan/gClient)
 
 **More coming soon**
