@@ -12,7 +12,7 @@ import (
 )
 
 func TestSubscriber(t *testing.T) {
-	addr := "127.0.0.1:13000"
+	addr := "127.0.0.1:0"
 	proto := "tcp"
 	capacity := uint64(256)
 	topic_1 := "topic_1"
@@ -26,19 +26,19 @@ func TestSubscriber(t *testing.T) {
 	delay := time.Duration(5) * time.Millisecond
 
 	ctx, cancel := context.WithCancel(context.Background())
-	_, err := hub.New(ctx, addr, capacity)
+	h, err := hub.New(ctx, addr, capacity)
 	if err != nil {
 		t.Fatalf("Failed to start Hub : %s\n", err.Error())
 	}
 
-	pub, err := publisher.New(ctx, proto, addr)
+	pub, err := publisher.New(ctx, proto, h.Addr())
 	if err != nil {
 		t.Fatalf("Failed to start publisher : %s\n", err.Error())
 	}
 
 	var i uint64
 	for ; i < count; i++ {
-		sub, err := New(ctx, proto, addr, capacity, topics...)
+		sub, err := New(ctx, proto, h.Addr(), capacity, topics...)
 		if err != nil {
 			t.Fatalf("Failed to start subscriber %d : %s\n", i+1, err.Error())
 		}
