@@ -9,4 +9,4 @@ RUN apk add --no-cache ca-certificates
 WORKDIR /app
 COPY --from=builder /app/0hub /usr/bin
 EXPOSE 13000
-ENTRYPOINT [ "0hub", "-addr", "0.0.0.0" ]
+ENTRYPOINT [ "0hub", "-addr", "0.0.0.0", "-port", "13000", "-capacity", "4096" ]
