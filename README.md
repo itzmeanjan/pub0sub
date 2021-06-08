@@ -73,7 +73,11 @@ Run using
 
 > If interested, you can check `0hub` implementation [here](./cli/hub/0hub.go)
 
-You may be prefer Docker-ised setup for running Hub
+---
+
+**Dockerised `0hub`**
+
+You may prefer Docker-ised setup for running Hub
 
 ```bash
 docker build -t 0hub . # assuming docker daemon is running
