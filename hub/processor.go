@@ -4,16 +4,13 @@ import (
 	"bytes"
 	"context"
 	"log"
-	"runtime"
 	"time"
 
-	"github.com/gammazero/workerpool"
 	"github.com/itzmeanjan/pub0sub/ops"
 )
 
 func (h *Hub) process(ctx context.Context, running chan struct{}) {
 	close(running)
-	wp := workerpool.New(runtime.NumCPU())
 
 	op := ops.MSG_PUSH
 	for {
@@ -23,30 +20,18 @@ func (h *Hub) process(ctx context.Context, running chan struct{}) {
 
 		case <-h.ping:
 			if msg := h.next(); msg != nil {
-
-				wp.Submit(func() {
-					func(msg *ops.Msg) {
-						h.writeMessage(ctx, &op, msg)
-					}(msg)
-				})
-
+				h.writeMessage(ctx, &op, msg)
 			}
 
-		case <-time.After(time.Duration(100) * time.Millisecond):
+		case <-time.After(time.Duration(256) * time.Millisecond):
 			started := time.Now()
 
 			for msg := h.next(); msg != nil; {
+				h.writeMessage(ctx, &op, msg)
 
-				wp.Submit(func() {
-					func(msg *ops.Msg) {
-						h.writeMessage(ctx, &op, msg)
-					}(msg)
-				})
-
-				if time.Since(started) > time.Duration(100)*time.Millisecond {
+				if time.Since(started) > time.Duration(512)*time.Millisecond {
 					break
 				}
-
 			}
 
 		}

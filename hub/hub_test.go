@@ -12,7 +12,7 @@ import (
 )
 
 func TestHub(t *testing.T) {
-	addr := "127.0.0.1:13000"
+	addr := "127.0.0.1:0"
 	proto := "tcp"
 	capacity := uint64(256)
 	topic_1 := "topic_1"
@@ -22,17 +22,17 @@ func TestHub(t *testing.T) {
 	delay := time.Duration(5) * time.Millisecond
 
 	ctx, cancel := context.WithCancel(context.Background())
-	_, err := New(ctx, addr, capacity)
+	hub, err := New(ctx, addr, capacity)
 	if err != nil {
 		t.Fatalf("Failed to start Hub : %s\n", err.Error())
 	}
 
-	pub, err := publisher.New(ctx, proto, addr)
+	pub, err := publisher.New(ctx, proto, hub.Addr())
 	if err != nil {
 		t.Fatalf("Failed to start publisher : %s\n", err.Error())
 	}
 
-	sub, err := subscriber.New(ctx, proto, addr, capacity, topics...)
+	sub, err := subscriber.New(ctx, proto, hub.Addr(), capacity, topics...)
 	if err != nil {
 		t.Fatalf("Failed to start subscriber : %s\n", err.Error())
 	}
