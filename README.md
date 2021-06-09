@@ -73,6 +73,60 @@ Run using
 
 > If interested, you can check `0hub` implementation [here](./cli/hub/0hub.go)
 
+---
+
+**Dockerised `0hub`**
+
+You may prefer Docker-ised setup for running Hub
+
+```bash
+make docker_hub # assuming docker daemon running
+```
+
+List images
+
+```bash
+docker images # find `0hub` in list
+```
+
+Remove `<none>` tagged images [ **optional** ]
+
+```bash
+docker images -a | grep none | awk '{ print $3}' | xargs docker rmi --force
+```
+
+Run `0hub` as container. *You may want to change ENV variables, check defaults in `0hub.env`*
+
+```bash
+make run_hub
+docker ps # must list `hub`
+```
+
+> Or, if you want `0hub` to be reachable on `localhost:13000`
+
+```bash
+docker run --name hub -p 13000:13000 --env-file 0hub.env -d 0hub # reachable at localhost:13000
+```
+
+Check container log
+
+```bash
+docker logs hub
+```
+
+If you want to inspect container
+
+```bash
+docker inspect hub
+```
+
+Stop when done
+
+```bash
+make stop_hub
+make remove_hub
+```
+
 ### Publisher
 
 You can interact with Hub, using minimalistic publisher CLI client `0pub`. Implementation can be found [here](./cli/publisher/0pub.go)

@@ -15,9 +15,9 @@ import (
 
 func main() {
 	var (
-		addr     = flag.String("addr", "127.0.0.1", "Address to listen on")
-		port     = flag.Uint64("port", 13000, "Port to listen on")
-		capacity = flag.Uint64("capacity", 4096, "Pending message queue capacity")
+		addr     = flag.String("addr", getAddr(), "Address to listen on")
+		port     = flag.Uint64("port", getPort(), "Port to listen on")
+		capacity = flag.Uint64("capacity", getCapacity(), "Pending message queue capacity")
 	)
 	flag.Parse()
 
