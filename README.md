@@ -105,7 +105,7 @@ docker ps # must list `hub`
 > Or, if you want `0hub` to be reachable on `localhost:13000`
 
 ```bash
-docker run --name hub -p 13000:13000 -d 0hub # reachable at localhost:13000
+docker run --name hub -p 13000:13000 --env-file 0hub.env -d 0hub # reachable at localhost:13000
 ```
 
 Check container log
