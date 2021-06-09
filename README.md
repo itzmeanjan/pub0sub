@@ -80,7 +80,7 @@ Run using
 You may prefer Docker-ised setup for running Hub
 
 ```bash
-docker build -t 0hub . # assuming docker daemon is running
+make docker_hub # assuming docker daemon running
 ```
 
 List images
@@ -95,12 +95,17 @@ Remove `<none>` tagged images [ **optional** ]
 docker images -a | grep none | awk '{ print $3}' | xargs docker rmi --force
 ```
 
-Run `0hub` as container
+Run `0hub` as container. *You may want to change ENV variables, check defaults in `0hub.env`*
 
 ```bash
-docker run --name hub -p 13000:13000 -d 0hub # hub reachable at localhost:13000
-
+make run_hub
 docker ps # must list `hub`
+```
+
+> Or, if you want `0hub` to be reachable on `localhost:13000`
+
+```bash
+docker run --name hub -p 13000:13000 -d 0hub # reachable at localhost:13000
 ```
 
 Check container log
@@ -118,8 +123,8 @@ docker inspect hub
 Stop when done
 
 ```bash
-docker stop hub
-docker rm hub # may be remove too
+make stop_hub
+make remove_hub
 ```
 
 ### Publisher
