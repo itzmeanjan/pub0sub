@@ -9,8 +9,8 @@ import (
 	"github.com/itzmeanjan/pub0sub/ops"
 )
 
-func (h *Hub) process(ctx context.Context, running chan struct{}) {
-	close(running)
+func (h *Hub) process(ctx context.Context, id uint, running chan struct{}) {
+	running <- struct{}{}
 
 	op := ops.MSG_PUSH
 	for {
@@ -20,14 +20,14 @@ func (h *Hub) process(ctx context.Context, running chan struct{}) {
 
 		case <-h.ping:
 			if msg := h.next(); msg != nil {
-				h.writeMessage(ctx, &op, msg)
+				h.writeMessage(ctx, id, &op, msg)
 			}
 
 		case <-time.After(time.Duration(256) * time.Millisecond):
 			started := time.Now()
 
 			for msg := h.next(); msg != nil; {
-				h.writeMessage(ctx, &op, msg)
+				h.writeMessage(ctx, id, &op, msg)
 
 				if time.Since(started) > time.Duration(512)*time.Millisecond {
 					break
@@ -38,7 +38,7 @@ func (h *Hub) process(ctx context.Context, running chan struct{}) {
 	}
 }
 
-func (h *Hub) writeMessage(ctx context.Context, op *ops.OP, msg *ops.Msg) {
+func (h *Hub) writeMessage(ctx context.Context, id uint, op *ops.OP, msg *ops.Msg) {
 	if msg == nil {
 		return
 	}
@@ -64,7 +64,7 @@ func (h *Hub) writeMessage(ctx context.Context, op *ops.OP, msg *ops.Msg) {
 		}
 
 		for _, conn := range subs {
-			if err := h.watcher.Write(ctx, conn, buf.Bytes()); err != nil {
+			if err := h.watchers[id].eventLoop.Write(ctx, conn, buf.Bytes()); err != nil {
 				log.Printf("[pub0sub] Error : %s\n", err.Error())
 				continue
 			}

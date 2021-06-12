@@ -10,7 +10,7 @@ import (
 	"github.com/xtaci/gaio"
 )
 
-func (h *Hub) handleRead(ctx context.Context, result gaio.OpResult) error {
+func (h *Hub) handleRead(ctx context.Context, id uint, result gaio.OpResult) error {
 	if result.Error != nil {
 		return result.Error
 	}
@@ -28,22 +28,22 @@ func (h *Hub) handleRead(ctx context.Context, result gaio.OpResult) error {
 
 	// 1
 	if _, ok := h.pendingPublishers[result.Conn]; ok {
-		return h.handleMessagePublish(ctx, result.Conn, data[:])
+		return h.handleMessagePublish(ctx, id, result.Conn, data[:])
 	}
 
 	// 2
 	if _, ok := h.pendingNewSubscribers[result.Conn]; ok {
-		return h.handleNewSubscription(ctx, result.Conn, data[:])
+		return h.handleNewSubscription(ctx, id, result.Conn, data[:])
 	}
 
 	// 3
 	if _, ok := h.pendingExistingSubscribers[result.Conn]; ok {
-		return h.handleUpdateSubscription(ctx, result.Conn, data[:])
+		return h.handleUpdateSubscription(ctx, id, result.Conn, data[:])
 	}
 
 	// 4
 	if _, ok := h.pendingUnsubscribers[result.Conn]; ok {
-		return h.handleUnsubscription(ctx, result.Conn, data[:])
+		return h.handleUnsubscription(ctx, id, result.Conn, data[:])
 	}
 
 	// Envelope sent by client
@@ -75,13 +75,14 @@ func (h *Hub) handleRead(ctx context.Context, result gaio.OpResult) error {
 
 		}
 
-		h.enqueuedReadLock.RLock()
-		defer h.enqueuedReadLock.RUnlock()
-		if enqueued, ok := h.enqueuedRead[result.Conn]; ok && enqueued.yes {
-			enqueued.yes = false
+		watcher := h.watchers[id]
+		watcher.lock.RLock()
+		defer watcher.lock.RUnlock()
+		if enqueued, ok := watcher.ongoingRead[result.Conn]; ok && !enqueued.envelopeRead {
+			enqueued.envelopeRead = true
 
 			buf := make([]byte, size)
-			return h.watcher.Read(ctx, result.Conn, buf)
+			return watcher.eventLoop.Read(ctx, result.Conn, buf)
 		}
 
 		return ops.ErrIllegalRead
@@ -92,7 +93,7 @@ func (h *Hub) handleRead(ctx context.Context, result gaio.OpResult) error {
 	}
 }
 
-func (h *Hub) handleMessagePublish(ctx context.Context, conn net.Conn, data []byte) error {
+func (h *Hub) handleMessagePublish(ctx context.Context, id uint, conn net.Conn, data []byte) error {
 	// reading message from stream
 	iStream := bytes.NewReader(data[:])
 	msg := new(ops.Msg)
@@ -114,10 +115,10 @@ func (h *Hub) handleMessagePublish(ctx context.Context, conn net.Conn, data []by
 	}
 
 	delete(h.pendingPublishers, conn)
-	return h.watcher.Write(ctx, conn, oStream.Bytes())
+	return h.watchers[id].eventLoop.Write(ctx, conn, oStream.Bytes())
 }
 
-func (h *Hub) handleNewSubscription(ctx context.Context, conn net.Conn, data []byte) error {
+func (h *Hub) handleNewSubscription(ctx context.Context, id uint, conn net.Conn, data []byte) error {
 	// reading message from stream
 	iStream := bytes.NewReader(data[:])
 	msg := new(ops.NewSubscriptionRequest)
@@ -130,7 +131,9 @@ func (h *Hub) handleNewSubscription(ctx context.Context, conn net.Conn, data []b
 	// keeping track of active subscriber, so that
 	// when need can run eviction routine targeting
 	// this subscriber ( unique id )
+	h.connectedSubscribersLock.Lock()
 	h.connectedSubscribers[conn] = subId
+	h.connectedSubscribersLock.Unlock()
 
 	// writing message into stream
 	oStream := new(bytes.Buffer)
@@ -144,10 +147,10 @@ func (h *Hub) handleNewSubscription(ctx context.Context, conn net.Conn, data []b
 	}
 
 	delete(h.pendingNewSubscribers, conn)
-	return h.watcher.Write(ctx, conn, oStream.Bytes())
+	return h.watchers[id].eventLoop.Write(ctx, conn, oStream.Bytes())
 }
 
-func (h *Hub) handleUpdateSubscription(ctx context.Context, conn net.Conn, data []byte) error {
+func (h *Hub) handleUpdateSubscription(ctx context.Context, id uint, conn net.Conn, data []byte) error {
 	// reading message from stream
 	iStream := bytes.NewReader(data)
 	msg := new(ops.AddSubscriptionRequest)
@@ -169,10 +172,10 @@ func (h *Hub) handleUpdateSubscription(ctx context.Context, conn net.Conn, data 
 	}
 
 	delete(h.pendingExistingSubscribers, conn)
-	return h.watcher.Write(ctx, conn, oStream.Bytes())
+	return h.watchers[id].eventLoop.Write(ctx, conn, oStream.Bytes())
 }
 
-func (h *Hub) handleUnsubscription(ctx context.Context, conn net.Conn, data []byte) error {
+func (h *Hub) handleUnsubscription(ctx context.Context, id uint, conn net.Conn, data []byte) error {
 	// reading message from stream
 	iStream := bytes.NewReader(data)
 	msg := new(ops.UnsubcriptionRequest)
@@ -194,5 +197,5 @@ func (h *Hub) handleUnsubscription(ctx context.Context, conn net.Conn, data []by
 	}
 
 	delete(h.pendingUnsubscribers, conn)
-	return h.watcher.Write(ctx, conn, oStream.Bytes())
+	return h.watchers[id].eventLoop.Write(ctx, conn, oStream.Bytes())
 }

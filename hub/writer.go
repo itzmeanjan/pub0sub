@@ -6,17 +6,18 @@ import (
 	"github.com/xtaci/gaio"
 )
 
-func (h *Hub) handleWrite(ctx context.Context, result gaio.OpResult) error {
+func (h *Hub) handleWrite(ctx context.Context, id uint, result gaio.OpResult) error {
 	if result.Error != nil {
 		return result.Error
 	}
 
-	h.enqueuedReadLock.RLock()
-	defer h.enqueuedReadLock.RUnlock()
+	watcher := h.watchers[id]
+	watcher.lock.RLock()
+	defer watcher.lock.RUnlock()
 
-	if enqueued, ok := h.enqueuedRead[result.Conn]; ok && !enqueued.yes {
-		enqueued.yes = true
-		return h.watcher.Read(ctx, result.Conn, enqueued.buf)
+	if enqueued, ok := watcher.ongoingRead[result.Conn]; ok && enqueued.envelopeRead {
+		enqueued.envelopeRead = false
+		return watcher.eventLoop.Read(ctx, result.Conn, enqueued.buf)
 	}
 
 	return nil
