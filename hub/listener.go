@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net"
+
+	"github.com/itzmeanjan/pub0sub/ops"
 )
 
 func (h *Hub) listen(ctx context.Context, addr string, done chan bool) {
@@ -48,7 +50,7 @@ func (h *Hub) listen(ctx context.Context, addr string, done chan bool) {
 			watcher := h.watchers[nextWatcher]
 
 			watcher.lock.Lock()
-			watcher.ongoingRead[conn] = &readState{buf: buf}
+			watcher.ongoingRead[conn] = &readState{buf: buf, opcode: ops.UNSUPPORTED}
 			watcher.lock.Unlock()
 
 			if err := watcher.eventLoop.Read(ctx, conn, buf); err != nil {

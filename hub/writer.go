@@ -3,6 +3,7 @@ package hub
 import (
 	"context"
 
+	"github.com/itzmeanjan/pub0sub/ops"
 	"github.com/xtaci/gaio"
 )
 
@@ -15,9 +16,11 @@ func (h *Hub) handleWrite(ctx context.Context, id uint, result gaio.OpResult) er
 	watcher.lock.RLock()
 	defer watcher.lock.RUnlock()
 
-	if enqueued, ok := watcher.ongoingRead[result.Conn]; ok && enqueued.envelopeRead {
-		enqueued.envelopeRead = false
-		return watcher.eventLoop.Read(ctx, result.Conn, enqueued.buf)
+	if ongoing, ok := watcher.ongoingRead[result.Conn]; ok && ongoing.envelopeRead {
+		ongoing.envelopeRead = false
+		ongoing.opcode = ops.UNSUPPORTED
+
+		return watcher.eventLoop.Read(ctx, result.Conn, ongoing.buf)
 	}
 
 	return nil

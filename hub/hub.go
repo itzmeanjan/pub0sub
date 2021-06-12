@@ -12,26 +12,22 @@ import (
 // Hub - Abstraction between message publishers & subscribers,
 // works as a multiplexer ( or router )
 type Hub struct {
-	addr                       string
-	watchers                   map[uint]*watcher
-	watcherCount               uint
-	pendingPublishers          map[net.Conn]bool
-	pendingNewSubscribers      map[net.Conn]bool
-	pendingExistingSubscribers map[net.Conn]bool
-	pendingUnsubscribers       map[net.Conn]bool
-	connectedSubscribers       map[net.Conn]uint64
-	connectedSubscribersLock   *sync.RWMutex
-	index                      uint64
-	subLock                    *sync.RWMutex
-	subscribers                map[string]map[uint64]net.Conn
-	revLock                    *sync.RWMutex
-	revSubscribers             map[uint64]map[string]bool
-	queueLock                  *sync.RWMutex
-	pendingQueue               []*ops.Msg
-	ping                       chan struct{}
-	evict                      chan uint64
-	Connected                  chan string
-	Disconnected               chan string
+	addr                     string
+	watchers                 map[uint]*watcher
+	watcherCount             uint
+	connectedSubscribers     map[net.Conn]uint64
+	connectedSubscribersLock *sync.RWMutex
+	index                    uint64
+	subLock                  *sync.RWMutex
+	subscribers              map[string]map[uint64]net.Conn
+	revLock                  *sync.RWMutex
+	revSubscribers           map[uint64]map[string]bool
+	queueLock                *sync.RWMutex
+	pendingQueue             []*ops.Msg
+	ping                     chan struct{}
+	evict                    chan uint64
+	Connected                chan string
+	Disconnected             chan string
 }
 
 func (h *Hub) Addr() string {
@@ -45,6 +41,7 @@ type watcher struct {
 }
 
 type readState struct {
+	opcode       ops.OP
 	envelopeRead bool
 	buf          []byte
 }
@@ -52,25 +49,21 @@ type readState struct {
 // New - Creates a new instance of hub, ready to be used
 func New(ctx context.Context, addr string, cap uint64) (*Hub, error) {
 	hub := Hub{
-		watcherCount:               2,
-		watchers:                   make(map[uint]*watcher),
-		pendingPublishers:          make(map[net.Conn]bool),
-		pendingNewSubscribers:      make(map[net.Conn]bool),
-		pendingExistingSubscribers: make(map[net.Conn]bool),
-		pendingUnsubscribers:       make(map[net.Conn]bool),
-		connectedSubscribers:       make(map[net.Conn]uint64),
-		connectedSubscribersLock:   &sync.RWMutex{},
-		index:                      0,
-		subLock:                    &sync.RWMutex{},
-		subscribers:                make(map[string]map[uint64]net.Conn),
-		revLock:                    &sync.RWMutex{},
-		revSubscribers:             make(map[uint64]map[string]bool),
-		queueLock:                  &sync.RWMutex{},
-		pendingQueue:               make([]*ops.Msg, 0, cap),
-		ping:                       make(chan struct{}, cap),
-		evict:                      make(chan uint64, cap),
-		Connected:                  make(chan string, 1),
-		Disconnected:               make(chan string, 1),
+		watcherCount:             2,
+		watchers:                 make(map[uint]*watcher),
+		connectedSubscribers:     make(map[net.Conn]uint64),
+		connectedSubscribersLock: &sync.RWMutex{},
+		index:                    0,
+		subLock:                  &sync.RWMutex{},
+		subscribers:              make(map[string]map[uint64]net.Conn),
+		revLock:                  &sync.RWMutex{},
+		revSubscribers:           make(map[uint64]map[string]bool),
+		queueLock:                &sync.RWMutex{},
+		pendingQueue:             make([]*ops.Msg, 0, cap),
+		ping:                     make(chan struct{}, cap),
+		evict:                    make(chan uint64, cap),
+		Connected:                make(chan string, 1),
+		Disconnected:             make(chan string, 1),
 	}
 
 	var runWatcher = make(chan struct{}, hub.watcherCount*2)
