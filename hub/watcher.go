@@ -12,7 +12,9 @@ func (h *Hub) watch(ctx context.Context, id uint, done chan struct{}) {
 	// notifying that watcher started
 	done <- struct{}{}
 
+	h.watchersLock.RLock()
 	watcher := h.watchers[id]
+	h.watchersLock.RUnlock()
 	defer func() {
 		if err := watcher.eventLoop.Close(); err != nil {
 			log.Printf("[pub0sub] Error : %s\n", err.Error())

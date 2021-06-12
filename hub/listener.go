@@ -47,7 +47,10 @@ func (h *Hub) listen(ctx context.Context, addr string, done chan bool) {
 
 			buf := make([]byte, 5)
 			nextWatcher = (nextWatcher + 1) % h.watcherCount
+
+			h.watchersLock.RLock()
 			watcher := h.watchers[nextWatcher]
+			h.watchersLock.RUnlock()
 
 			watcher.lock.Lock()
 			watcher.ongoingRead[conn] = &readState{buf: buf, opcode: ops.UNSUPPORTED}

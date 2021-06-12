@@ -20,7 +20,11 @@ func (h *Hub) handleRead(ctx context.Context, id uint, result gaio.OpResult) err
 	}
 
 	data := result.Buffer[:result.Size]
+
+	h.watchersLock.RLock()
 	watcher := h.watchers[id]
+	h.watchersLock.RUnlock()
+
 	watcher.lock.RLock()
 	defer watcher.lock.RUnlock()
 
@@ -91,6 +95,8 @@ func (h *Hub) handleMessagePublish(ctx context.Context, id uint, conn net.Conn, 
 		return err
 	}
 
+	h.watchersLock.RLock()
+	defer h.watchersLock.RUnlock()
 	return h.watchers[id].eventLoop.Write(ctx, conn, oStream.Bytes())
 }
 
@@ -122,6 +128,8 @@ func (h *Hub) handleNewSubscription(ctx context.Context, id uint, conn net.Conn,
 		return err
 	}
 
+	h.watchersLock.RLock()
+	defer h.watchersLock.RUnlock()
 	return h.watchers[id].eventLoop.Write(ctx, conn, oStream.Bytes())
 }
 
@@ -146,6 +154,8 @@ func (h *Hub) handleUpdateSubscription(ctx context.Context, id uint, conn net.Co
 		return err
 	}
 
+	h.watchersLock.RLock()
+	defer h.watchersLock.RUnlock()
 	return h.watchers[id].eventLoop.Write(ctx, conn, oStream.Bytes())
 }
 
@@ -170,5 +180,7 @@ func (h *Hub) handleUnsubscription(ctx context.Context, id uint, conn net.Conn, 
 		return err
 	}
 
+	h.watchersLock.RLock()
+	defer h.watchersLock.RUnlock()
 	return h.watchers[id].eventLoop.Write(ctx, conn, oStream.Bytes())
 }

@@ -33,7 +33,7 @@ func TestDeliveryOrderliness(t *testing.T) {
 	capacity := uint64(256)
 	topic_1 := "topic_1"
 	topics := []string{topic_1}
-	end := uint64(100_000)
+	end := uint64(10_000)
 	delay := 100 * time.Millisecond
 
 	ctx, cancel := context.WithCancel(context.Background())

@@ -13,6 +13,7 @@ import (
 // works as a multiplexer ( or router )
 type Hub struct {
 	addr                     string
+	watchersLock             *sync.RWMutex
 	watchers                 map[uint]*watcher
 	watcherCount             uint
 	connectedSubscribers     map[net.Conn]*subInfo
@@ -55,6 +56,7 @@ type subInfo struct {
 func New(ctx context.Context, addr string, cap uint64) (*Hub, error) {
 	hub := Hub{
 		watcherCount:             2,
+		watchersLock:             &sync.RWMutex{},
 		watchers:                 make(map[uint]*watcher),
 		connectedSubscribers:     make(map[net.Conn]*subInfo),
 		connectedSubscribersLock: &sync.RWMutex{},
@@ -73,6 +75,7 @@ func New(ctx context.Context, addr string, cap uint64) (*Hub, error) {
 
 	var runWatcher = make(chan struct{}, hub.watcherCount)
 	var i uint
+	hub.watchersLock.Lock()
 	for ; i < hub.watcherCount; i++ {
 		w, err := gaio.NewWatcher()
 		if err != nil {
@@ -87,6 +90,7 @@ func New(ctx context.Context, addr string, cap uint64) (*Hub, error) {
 			go hub.watch(ctx, id, runWatcher)
 		}(i)
 	}
+	hub.watchersLock.Unlock()
 
 	startedOff := 0
 	for range runWatcher {
