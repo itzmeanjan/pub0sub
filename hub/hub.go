@@ -15,7 +15,7 @@ type Hub struct {
 	addr                     string
 	watchers                 map[uint]*watcher
 	watcherCount             uint
-	connectedSubscribers     map[net.Conn]uint64
+	connectedSubscribers     map[net.Conn]*subInfo
 	connectedSubscribersLock *sync.RWMutex
 	index                    uint64
 	subLock                  *sync.RWMutex
@@ -46,12 +46,17 @@ type readState struct {
 	buf          []byte
 }
 
+type subInfo struct {
+	id        uint64
+	watcherId uint
+}
+
 // New - Creates a new instance of hub, ready to be used
 func New(ctx context.Context, addr string, cap uint64) (*Hub, error) {
 	hub := Hub{
 		watcherCount:             2,
 		watchers:                 make(map[uint]*watcher),
-		connectedSubscribers:     make(map[net.Conn]uint64),
+		connectedSubscribers:     make(map[net.Conn]*subInfo),
 		connectedSubscribersLock: &sync.RWMutex{},
 		index:                    0,
 		subLock:                  &sync.RWMutex{},
@@ -66,7 +71,7 @@ func New(ctx context.Context, addr string, cap uint64) (*Hub, error) {
 		Disconnected:             make(chan string, 1),
 	}
 
-	var runWatcher = make(chan struct{}, hub.watcherCount*2)
+	var runWatcher = make(chan struct{}, hub.watcherCount)
 	var i uint
 	for ; i < hub.watcherCount; i++ {
 		w, err := gaio.NewWatcher()
@@ -80,29 +85,31 @@ func New(ctx context.Context, addr string, cap uint64) (*Hub, error) {
 		}
 		func(id uint) {
 			go hub.watch(ctx, id, runWatcher)
-			go hub.process(ctx, id, runWatcher)
 		}(i)
 	}
 
 	startedOff := 0
 	for range runWatcher {
 		startedOff++
-		if startedOff >= 2*int(hub.watcherCount) {
+		if startedOff >= int(hub.watcherCount) {
 			break
 		}
 	}
 
 	var (
-		runListener = make(chan bool)
-		runEvict    = make(chan struct{})
+		runListener  = make(chan bool)
+		runEvictor   = make(chan struct{})
+		runProcessor = make(chan struct{})
 	)
 
 	go hub.listen(ctx, addr, runListener)
 	if !<-runListener {
 		return nil, ops.ErrListenerNotStarted
 	}
-	go hub.evictSubscribers(ctx, runEvict)
-	<-runEvict
+	go hub.process(ctx, runProcessor)
+	go hub.evictSubscribers(ctx, runEvictor)
+	<-runProcessor
+	<-runEvictor
 
 	return &hub, nil
 }

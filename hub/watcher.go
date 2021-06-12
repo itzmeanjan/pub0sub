@@ -43,8 +43,8 @@ func (h *Hub) watch(ctx context.Context, id uint, done chan struct{}) {
 						}
 
 						h.connectedSubscribersLock.Lock()
-						if id, ok := h.connectedSubscribers[res.Conn]; ok {
-							h.evict <- id
+						if subInfo, ok := h.connectedSubscribers[res.Conn]; ok {
+							h.evict <- subInfo.id
 							delete(h.connectedSubscribers, res.Conn)
 						}
 						h.connectedSubscribersLock.Unlock()
@@ -68,8 +68,8 @@ func (h *Hub) watch(ctx context.Context, id uint, done chan struct{}) {
 						}
 
 						h.connectedSubscribersLock.Lock()
-						if id, ok := h.connectedSubscribers[res.Conn]; ok {
-							h.evict <- id
+						if subInfo, ok := h.connectedSubscribers[res.Conn]; ok {
+							h.evict <- subInfo.id
 							delete(h.connectedSubscribers, res.Conn)
 						}
 						h.connectedSubscribersLock.Unlock()

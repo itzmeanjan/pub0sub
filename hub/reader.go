@@ -108,7 +108,7 @@ func (h *Hub) handleNewSubscription(ctx context.Context, id uint, conn net.Conn,
 	// when need can run eviction routine targeting
 	// this subscriber ( unique id )
 	h.connectedSubscribersLock.Lock()
-	h.connectedSubscribers[conn] = subId
+	h.connectedSubscribers[conn] = &subInfo{id: subId, watcherId: id}
 	h.connectedSubscribersLock.Unlock()
 
 	// writing message into stream

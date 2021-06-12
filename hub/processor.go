@@ -9,8 +9,8 @@ import (
 	"github.com/itzmeanjan/pub0sub/ops"
 )
 
-func (h *Hub) process(ctx context.Context, id uint, running chan struct{}) {
-	running <- struct{}{}
+func (h *Hub) process(ctx context.Context, running chan struct{}) {
+	close(running)
 
 	op := ops.MSG_PUSH
 	for {
@@ -20,14 +20,14 @@ func (h *Hub) process(ctx context.Context, id uint, running chan struct{}) {
 
 		case <-h.ping:
 			if msg := h.next(); msg != nil {
-				h.writeMessage(ctx, id, &op, msg)
+				h.writeMessage(ctx, &op, msg)
 			}
 
 		case <-time.After(time.Duration(256) * time.Millisecond):
 			started := time.Now()
 
 			for msg := h.next(); msg != nil; {
-				h.writeMessage(ctx, id, &op, msg)
+				h.writeMessage(ctx, &op, msg)
 
 				if time.Since(started) > time.Duration(512)*time.Millisecond {
 					break
@@ -38,7 +38,7 @@ func (h *Hub) process(ctx context.Context, id uint, running chan struct{}) {
 	}
 }
 
-func (h *Hub) writeMessage(ctx context.Context, id uint, op *ops.OP, msg *ops.Msg) {
+func (h *Hub) writeMessage(ctx context.Context, op *ops.OP, msg *ops.Msg) {
 	if msg == nil {
 		return
 	}
@@ -63,10 +63,15 @@ func (h *Hub) writeMessage(ctx context.Context, id uint, op *ops.OP, msg *ops.Ms
 			continue
 		}
 
+		h.connectedSubscribersLock.RLock()
+		defer h.connectedSubscribersLock.RUnlock()
+
 		for _, conn := range subs {
-			if err := h.watchers[id].eventLoop.Write(ctx, conn, buf.Bytes()); err != nil {
-				log.Printf("[pub0sub] Error : %s\n", err.Error())
-				continue
+			if subInfo, ok := h.connectedSubscribers[conn]; ok {
+				if err := h.watchers[subInfo.watcherId].eventLoop.Write(ctx, conn, buf.Bytes()); err != nil {
+					log.Printf("[pub0sub] Error : %s\n", err.Error())
+					continue
+				}
 			}
 		}
 	}
