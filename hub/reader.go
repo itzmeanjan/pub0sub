@@ -10,7 +10,7 @@ import (
 	"github.com/xtaci/gaio"
 )
 
-func (h *Hub) handleRead(ctx context.Context, result gaio.OpResult) error {
+func (h *Hub) handleRead(ctx context.Context, id uint, result gaio.OpResult) error {
 	if result.Error != nil {
 		return result.Error
 	}
@@ -21,29 +21,28 @@ func (h *Hub) handleRead(ctx context.Context, result gaio.OpResult) error {
 
 	data := result.Buffer[:result.Size]
 
-	// actual message body sent by client & body
-	// is ready for consumption
-	//
-	// Same scenario in {1, 2, 3, 4}, handling different opcodes
+	h.watchersLock.RLock()
+	watcher := h.watchers[id]
+	h.watchersLock.RUnlock()
 
-	// 1
-	if _, ok := h.pendingPublishers[result.Conn]; ok {
-		return h.handleMessagePublish(ctx, result.Conn, data[:])
-	}
+	watcher.lock.RLock()
+	defer watcher.lock.RUnlock()
 
-	// 2
-	if _, ok := h.pendingNewSubscribers[result.Conn]; ok {
-		return h.handleNewSubscription(ctx, result.Conn, data[:])
-	}
+	if v, ok := watcher.ongoingRead[result.Conn]; ok && v.envelopeRead {
+		switch v.opcode {
+		case ops.PUB_REQ:
+			return h.handleMessagePublish(ctx, id, result.Conn, data[:])
 
-	// 3
-	if _, ok := h.pendingExistingSubscribers[result.Conn]; ok {
-		return h.handleUpdateSubscription(ctx, result.Conn, data[:])
-	}
+		case ops.NEW_SUB_REQ:
+			return h.handleNewSubscription(ctx, id, result.Conn, data[:])
 
-	// 4
-	if _, ok := h.pendingUnsubscribers[result.Conn]; ok {
-		return h.handleUnsubscription(ctx, result.Conn, data[:])
+		case ops.ADD_SUB_REQ:
+			return h.handleUpdateSubscription(ctx, id, result.Conn, data[:])
+
+		case ops.UNSUB_REQ:
+			return h.handleUnsubscription(ctx, id, result.Conn, data[:])
+
+		}
 	}
 
 	// Envelope sent by client
@@ -58,33 +57,16 @@ func (h *Hub) handleRead(ctx context.Context, result gaio.OpResult) error {
 		}
 
 		// remembering when next time data is read from this
-		// connection, consider it as message payload read
+		// socket, consider it as message payload read
 		// instead of message envelope read
-		switch op {
-		case ops.PUB_REQ:
-			h.pendingPublishers[result.Conn] = true
+		//
+		// Opcode also helps in understanding how to convert byte slice
+		// into structured message
+		watcher.ongoingRead[result.Conn].envelopeRead = true
+		watcher.ongoingRead[result.Conn].opcode = op
 
-		case ops.NEW_SUB_REQ:
-			h.pendingNewSubscribers[result.Conn] = true
-
-		case ops.ADD_SUB_REQ:
-			h.pendingExistingSubscribers[result.Conn] = true
-
-		case ops.UNSUB_REQ:
-			h.pendingUnsubscribers[result.Conn] = true
-
-		}
-
-		h.enqueuedReadLock.RLock()
-		defer h.enqueuedReadLock.RUnlock()
-		if enqueued, ok := h.enqueuedRead[result.Conn]; ok && enqueued.yes {
-			enqueued.yes = false
-
-			buf := make([]byte, size)
-			return h.watcher.Read(ctx, result.Conn, buf)
-		}
-
-		return ops.ErrIllegalRead
+		buf := make([]byte, size)
+		return watcher.eventLoop.Read(ctx, result.Conn, buf)
 
 	default:
 		return ops.ErrIllegalRead
@@ -92,7 +74,7 @@ func (h *Hub) handleRead(ctx context.Context, result gaio.OpResult) error {
 	}
 }
 
-func (h *Hub) handleMessagePublish(ctx context.Context, conn net.Conn, data []byte) error {
+func (h *Hub) handleMessagePublish(ctx context.Context, id uint, conn net.Conn, data []byte) error {
 	// reading message from stream
 	iStream := bytes.NewReader(data[:])
 	msg := new(ops.Msg)
@@ -113,11 +95,12 @@ func (h *Hub) handleMessagePublish(ctx context.Context, conn net.Conn, data []by
 		return err
 	}
 
-	delete(h.pendingPublishers, conn)
-	return h.watcher.Write(ctx, conn, oStream.Bytes())
+	h.watchersLock.RLock()
+	defer h.watchersLock.RUnlock()
+	return h.watchers[id].eventLoop.Write(ctx, conn, oStream.Bytes())
 }
 
-func (h *Hub) handleNewSubscription(ctx context.Context, conn net.Conn, data []byte) error {
+func (h *Hub) handleNewSubscription(ctx context.Context, id uint, conn net.Conn, data []byte) error {
 	// reading message from stream
 	iStream := bytes.NewReader(data[:])
 	msg := new(ops.NewSubscriptionRequest)
@@ -130,7 +113,9 @@ func (h *Hub) handleNewSubscription(ctx context.Context, conn net.Conn, data []b
 	// keeping track of active subscriber, so that
 	// when need can run eviction routine targeting
 	// this subscriber ( unique id )
-	h.connectedSubscribers[conn] = subId
+	h.connectedSubscribersLock.Lock()
+	h.connectedSubscribers[conn] = &subInfo{id: subId, watcherId: id}
+	h.connectedSubscribersLock.Unlock()
 
 	// writing message into stream
 	oStream := new(bytes.Buffer)
@@ -143,11 +128,12 @@ func (h *Hub) handleNewSubscription(ctx context.Context, conn net.Conn, data []b
 		return err
 	}
 
-	delete(h.pendingNewSubscribers, conn)
-	return h.watcher.Write(ctx, conn, oStream.Bytes())
+	h.watchersLock.RLock()
+	defer h.watchersLock.RUnlock()
+	return h.watchers[id].eventLoop.Write(ctx, conn, oStream.Bytes())
 }
 
-func (h *Hub) handleUpdateSubscription(ctx context.Context, conn net.Conn, data []byte) error {
+func (h *Hub) handleUpdateSubscription(ctx context.Context, id uint, conn net.Conn, data []byte) error {
 	// reading message from stream
 	iStream := bytes.NewReader(data)
 	msg := new(ops.AddSubscriptionRequest)
@@ -168,11 +154,12 @@ func (h *Hub) handleUpdateSubscription(ctx context.Context, conn net.Conn, data 
 		return err
 	}
 
-	delete(h.pendingExistingSubscribers, conn)
-	return h.watcher.Write(ctx, conn, oStream.Bytes())
+	h.watchersLock.RLock()
+	defer h.watchersLock.RUnlock()
+	return h.watchers[id].eventLoop.Write(ctx, conn, oStream.Bytes())
 }
 
-func (h *Hub) handleUnsubscription(ctx context.Context, conn net.Conn, data []byte) error {
+func (h *Hub) handleUnsubscription(ctx context.Context, id uint, conn net.Conn, data []byte) error {
 	// reading message from stream
 	iStream := bytes.NewReader(data)
 	msg := new(ops.UnsubcriptionRequest)
@@ -193,6 +180,7 @@ func (h *Hub) handleUnsubscription(ctx context.Context, conn net.Conn, data []by
 		return err
 	}
 
-	delete(h.pendingUnsubscribers, conn)
-	return h.watcher.Write(ctx, conn, oStream.Bytes())
+	h.watchersLock.RLock()
+	defer h.watchersLock.RUnlock()
+	return h.watchers[id].eventLoop.Write(ctx, conn, oStream.Bytes())
 }

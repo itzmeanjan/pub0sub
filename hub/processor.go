@@ -63,10 +63,15 @@ func (h *Hub) writeMessage(ctx context.Context, op *ops.OP, msg *ops.Msg) {
 			continue
 		}
 
+		h.connectedSubscribersLock.RLock()
+		defer h.connectedSubscribersLock.RUnlock()
+
 		for _, conn := range subs {
-			if err := h.watcher.Write(ctx, conn, buf.Bytes()); err != nil {
-				log.Printf("[pub0sub] Error : %s\n", err.Error())
-				continue
+			if subInfo, ok := h.connectedSubscribers[conn]; ok {
+				if err := h.watchers[subInfo.watcherId].eventLoop.Write(ctx, conn, buf.Bytes()); err != nil {
+					log.Printf("[pub0sub] Error : %s\n", err.Error())
+					continue
+				}
 			}
 		}
 	}

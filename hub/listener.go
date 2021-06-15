@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net"
+
+	"github.com/itzmeanjan/pub0sub/ops"
 )
 
 func (h *Hub) listen(ctx context.Context, addr string, done chan bool) {
@@ -24,6 +26,7 @@ func (h *Hub) listen(ctx context.Context, addr string, done chan bool) {
 
 	h.addr = lis.Addr().String()
 	done <- true
+	var nextWatcher uint
 
 	for {
 		select {
@@ -42,12 +45,18 @@ func (h *Hub) listen(ctx context.Context, addr string, done chan bool) {
 				h.Connected <- fmt.Sprintf("%s://%s", conn.RemoteAddr().Network(), conn.RemoteAddr().String())
 			}
 
-			h.enqueuedReadLock.Lock()
 			buf := make([]byte, 5)
-			h.enqueuedRead[conn] = &enqueuedRead{yes: true, buf: buf}
-			h.enqueuedReadLock.Unlock()
+			nextWatcher = (nextWatcher + 1) % h.watcherCount
 
-			if err := h.watcher.Read(ctx, conn, buf); err != nil {
+			h.watchersLock.RLock()
+			watcher := h.watchers[nextWatcher]
+			h.watchersLock.RUnlock()
+
+			watcher.lock.Lock()
+			watcher.ongoingRead[conn] = &readState{buf: buf, opcode: ops.UNSUPPORTED}
+			watcher.lock.Unlock()
+
+			if err := watcher.eventLoop.Read(ctx, conn, buf); err != nil {
 				log.Printf("[pub0sub] Error : %s\n", err.Error())
 				return
 			}
